@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Infineon | XENSIV&trade; Maus Konfigurator</title>
+  <meta name="description"
+        content="Infineon Demo-Anwendung: Konfiguration der XENSIV
+                 Maus über Web Bluetooth (GATT) direkt im Browser.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ─── Kopfzeile ──────────────────────────────── -->
+  <header class="ifx-header">
+    <div class="ifx-header-inner">
+      <div class="ifx-logo">
+        <img class="ifx-logo-img"
+             src="lowres-Logo_Infineon_RGB.eps.png"
+             alt="Infineon Technologies">
+      </div>
+
+      <nav class="ifx-nav" aria-label="Hauptnavigation">
+        <a class="ifx-nav-item is-active" href="#device-card">
+          Gerät
+        </a>
+        <a class="ifx-nav-item" href="#buttons-card">Tasten</a>
+        <a class="ifx-nav-item" href="#wheel-card">Scrollrad</a>
+        <a class="ifx-nav-item" href="#advanced-card">Erweitert</a>
+        <a class="ifx-nav-item" href="#log-card">Protokoll</a>
+      </nav>
+
+      <span class="ifx-badge">Customer Demo</span>
+    </div>
+  </header>
+
+  <!-- ─── Hero ───────────────────────────────────── -->
+  <section class="ifx-hero">
+    <div class="ifx-hero-inner">
+      <p class="ifx-eyebrow">
+        Human Machine Interface &middot; Web Bluetooth Demo
+      </p>
+      <h1>XENSIV&trade; Maus Konfigurator</h1>
+      <p class="ifx-hero-text">
+        Konfiguration und Live-Analyse der XENSIV&trade; Maus
+        direkt im Browser &ndash; LED, DPI, Tasten-Sensorik mit
+        Schwellwerten sowie Kalibrierung des magnetischen
+        Scrollrads. Die Kommunikation erfolgt über GATT
+        (Web Bluetooth), identisch zum Desktop-Tool
+        &bdquo;XENSIV Mouse Control v1.1&ldquo;.
+      </p>
+      <div class="ifx-hero-meta">
+        <span>Web Bluetooth &middot; BLE GATT</span>
+        <span>Live-Monitoring</span>
+        <span>Zero Install</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="container" id="dashboard">
+
+    <!-- ─── Verbindung ───────────────────────────── -->
+    <div class="card" id="status-card">
+      <div class="status-row">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Keine XENSIV&trade; Maus verbunden</span>
+      </div>
+
+      <p class="hint">
+        Koppeln Sie die XENSIV&trade; Maus zunächst in den
+        Bluetooth-Einstellungen des Betriebssystems. Danach genügt einmalig
+        die Freigabe im Browser &ndash; jeder weitere Aufruf dieser Seite
+        erkennt die Maus automatisch. Voraussetzung ist ein
+        Chromium-basierter Browser (Chrome, Edge, Opera) sowie ein Aufruf
+        über HTTPS oder <code>localhost</code>.
+      </p>
+
+      <div class="known-devices hidden" id="known-devices">
+        <p class="known-title">Vom Betriebssystem gekoppelte, freigegebene Geräte</p>
+        <div class="known-list" id="known-list"></div>
+      </div>
+
+      <div class="toolbar">
+        <button type="button" class="btn btn-primary" id="btn-connect">
+          Maus suchen &amp; freigeben
+        </button>
+        <button type="button" class="btn" id="btn-disconnect" disabled>
+          Trennen
+        </button>
+        <button type="button" class="btn btn-ghost" id="btn-refresh-known">
+          Geräteliste aktualisieren
+        </button>
+        <label class="check">
+          <input type="checkbox" id="opt-autoconnect" checked>
+          Automatisch verbinden
+        </label>
+        <label class="check">
+          <input type="checkbox" id="opt-all-devices">
+          Alle Bluetooth-Geräte im Dialog anzeigen
+        </label>
+      </div>
+
+      <p class="status-line is-error hidden" id="connect-error"></p>
+
+      <div class="meta-grid hidden" id="device-meta">
+        <div class="meta-item">
+          <span class="meta-label">Gerät</span>
+          <span class="meta-value" id="device-name">&ndash;</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Batterie</span>
+          <span class="meta-value" id="battery-value">&ndash;</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Gefundene Merkmale</span>
+          <span class="meta-value" id="feature-count">&ndash;</span>
+        </div>
+      </div>
+
+      <details class="sub-panel" id="uuid-panel">
+        <summary class="sub-head">GATT-Dienste &amp; Diagnose</summary>
+        <div class="sub-body">
+          <p class="hint">
+            Web Bluetooth gibt ausschließlich Dienste frei, die vor dem
+            Verbindungsaufbau angemeldet wurden. Tragen Sie hier die
+            128-Bit-UUID des XENSIV-Herstellerdienstes ein &ndash; eine
+            UUID pro Zeile oder durch Komma getrennt. Die UUID lässt sich
+            in Chrome über <code>chrome://bluetooth-internals</code> &rarr;
+            Devices &rarr; Inspect auslesen. Der Standard-Batteriedienst
+            (0x180F) ist bereits hinterlegt.
+          </p>
+          <textarea id="service-uuids" rows="4" spellcheck="false"
+                    aria-label="GATT-Dienst-UUIDs"></textarea>
+          <div class="toolbar">
+            <button type="button" class="btn" id="btn-save-uuids">
+              UUIDs speichern
+            </button>
+            <button type="button" class="btn btn-ghost" id="btn-reset-uuids">
+              Standard wiederherstellen
+            </button>
+          </div>
+          <ul class="char-report" id="char-report"></ul>
+        </div>
+      </details>
+    </div>
+
+    <!-- ─── LED, DPI und Visualisierung ──────────── -->
+    <details class="card hidden" id="device-card" open>
+      <summary class="card-head">LED, DPI &amp; Visualisierung</summary>
+      <div class="card-body">
+        <div class="split">
+
+          <div class="mouse-stage">
+            <svg class="mouse-svg" viewBox="0 0 240 400" role="img"
+                 aria-label="Schematische Darstellung der XENSIV Maus">
+              <ellipse class="mouse-glow" id="mouse-glow"
+                       cx="120" cy="288" rx="86" ry="46"/>
+              <path class="mouse-body" d="
+                M 120,12
+                C 66,12 34,62 30,150
+                C 26,240 44,344 120,388
+                C 196,344 214,240 210,150
+                C 206,62 174,12 120,12 Z"/>
+              <path class="mouse-btn" id="mouse-btn-left" d="
+                M 118,16 C 72,16 41,64 37,148 L 118,148 Z"/>
+              <path class="mouse-btn" id="mouse-btn-right" d="
+                M 122,16 C 168,16 199,64 203,148 L 122,148 Z"/>
+              <g id="mouse-wheel-group">
+                <rect class="mouse-wheel"
+                      x="109" y="44" width="22" height="58" rx="11"/>
+                <line class="mouse-wheel-mark"
+                      x1="120" y1="52" x2="120" y2="68"/>
+              </g>
+              <circle class="mouse-led" id="mouse-led"
+                      cx="120" cy="288" r="14"/>
+              <text class="mouse-label" x="120" y="336">XENSIV&#8482;</text>
+            </svg>
+
+            <div class="mouse-readout">
+              <span id="mouse-wheel-readout">Radwinkel &ndash;</span>
+              <span id="mouse-press-readout">Druck L &ndash; / R &ndash;</span>
+            </div>
+          </div>
+
+          <div class="stack">
+            <fieldset class="group">
+              <legend>LED-Steuerung</legend>
+              <div class="row">
+                <label for="led-color">Farbe</label>
+                <input type="color" id="led-color" value="#12a190">
+                <button type="button" class="btn btn-primary" id="btn-led-send">
+                  Farbe senden
+                </button>
+              </div>
+              <div class="chip-row">
+                <button type="button" class="chip" data-led="255,0,0">Rot</button>
+                <button type="button" class="chip" data-led="0,255,0">Grün</button>
+                <button type="button" class="chip" data-led="0,0,255">Blau</button>
+                <button type="button" class="chip" data-led="0,0,0">Aus</button>
+              </div>
+              <p class="hint">
+                Übertragen werden drei Bytes (R, G, B) an die
+                LED-Charakteristik.
+              </p>
+            </fieldset>
+
+            <fieldset class="group">
+              <legend>DPI-Einstellung</legend>
+              <div class="row">
+                <input type="range" id="dpi-slider"
+                       min="400" max="3200" step="50" value="800">
+                <input type="number" class="num" id="dpi-value"
+                       min="400" max="3200" step="50" value="800">
+                <span class="unit">DPI</span>
+              </div>
+              <p class="hint">
+                Der Wert wird als 16-Bit-Ganzzahl im Little-Endian-Format
+                übertragen (400 &ndash; 3200 DPI).
+              </p>
+            </fieldset>
+
+            <p class="status-line" id="device-status">Bereit</p>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- ─── Tasten-Sensorik ──────────────────────── -->
+    <details class="card hidden" id="buttons-card">
+      <summary class="card-head">Tasten-Sensorik &amp; Schwellwerte</summary>
+      <div class="card-body">
+        <p class="hint">
+          Wählen Sie je Taste den aktiven Sensor und ziehen Sie die rote
+          Markierung, um den Auslöse-Schwellwert (0 &ndash; 127) zu
+          bestimmen. Der türkise Balken zeigt den aktuellen Druckwert in
+          Echtzeit.
+        </p>
+
+        <fieldset class="group">
+          <legend>Linke Taste</legend>
+          <div class="row">
+            <label for="left-sensor">Sensortyp</label>
+            <select id="left-sensor">
+              <option value="left_force">Force</option>
+              <option value="left_tmr_2d" disabled>2D TMR (in Vorbereitung)</option>
+              <option value="left_hall">Hall</option>
+            </select>
+            <span class="hint-inline hidden" id="left-hint">
+              Zum Aktivieren &bdquo;Einstellungen anwenden&ldquo; klicken
+            </span>
+          </div>
+
+          <div class="press-bar" id="press-left" data-side="left">
+            <div class="press-bar-head">
+              <span class="press-bar-name">
+                <i class="press-bar-dot"></i>Linke Taste
+              </span>
+              <span class="press-bar-readout">
+                Druck <b class="press-bar-cur">0</b> &middot;
+                Schwelle <b class="press-bar-thr">64</b>
+              </span>
+            </div>
+            <div class="press-bar-track" role="slider" tabindex="0"
+                 aria-label="Schwellwert linke Taste"
+                 aria-valuemin="0" aria-valuemax="127" aria-valuenow="64">
+              <div class="press-bar-fill"></div>
+              <div class="press-bar-marker"></div>
+            </div>
+            <div class="press-bar-scale">
+              <span>0</span><span class="press-bar-max">40</span>
+            </div>
+          </div>
+
+          <div class="row">
+            <label for="left-threshold">Schwellwert</label>
+            <input type="number" class="num" id="left-threshold"
+                   min="0" max="127" value="64">
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Rechte Taste</legend>
+          <div class="row">
+            <label for="right-sensor">Sensortyp</label>
+            <select id="right-sensor">
+              <option value="right_force">Force</option>
+              <option value="right_hall">Hall</option>
+            </select>
+            <span class="hint-inline hidden" id="right-hint">
+              Zum Aktivieren &bdquo;Einstellungen anwenden&ldquo; klicken
+            </span>
+          </div>
+
+          <div class="press-bar" id="press-right" data-side="right">
+            <div class="press-bar-head">
+              <span class="press-bar-name">
+                <i class="press-bar-dot"></i>Rechte Taste
+              </span>
+              <span class="press-bar-readout">
+                Druck <b class="press-bar-cur">0</b> &middot;
+                Schwelle <b class="press-bar-thr">64</b>
+              </span>
+            </div>
+            <div class="press-bar-track" role="slider" tabindex="0"
+                 aria-label="Schwellwert rechte Taste"
+                 aria-valuemin="0" aria-valuemax="127" aria-valuenow="64">
+              <div class="press-bar-fill"></div>
+              <div class="press-bar-marker"></div>
+            </div>
+            <div class="press-bar-scale">
+              <span>0</span><span class="press-bar-max">40</span>
+            </div>
+          </div>
+
+          <div class="row">
+            <label for="right-threshold">Schwellwert</label>
+            <input type="number" class="num" id="right-threshold"
+                   min="0" max="127" value="64">
+          </div>
+        </fieldset>
+
+        <div class="toolbar">
+          <button type="button" class="btn" id="btn-buttons-read">
+            Vom Gerät laden
+          </button>
+          <button type="button" class="btn" id="btn-buttons-monitor">
+            Überwachung starten
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-buttons-apply">
+            Einstellungen anwenden
+          </button>
+        </div>
+
+        <p class="status-line" id="buttons-status">
+          Bereit &ndash; Sensor wählen und Schwellwert einstellen
+        </p>
+      </div>
+    </details>
+
+    <!-- ─── Scrollrad-Kalibrierung ───────────────── -->
+    <details class="card hidden" id="wheel-card">
+      <summary class="card-head">Scrollrad-Kalibrierung</summary>
+      <div class="card-body">
+
+        <fieldset class="group">
+          <legend>Datenstrom</legend>
+          <div class="toolbar">
+            <button type="button" class="btn btn-primary" id="btn-wheel-stream">
+              Streaming starten
+            </button>
+            <button type="button" class="btn" id="btn-wheel-clear">
+              Daten löschen
+            </button>
+            <label for="wheel-rate">Abtastrate</label>
+            <input type="number" class="num" id="wheel-rate"
+                   min="1" max="100" value="5">
+            <span class="unit">Hz</span>
+            <label class="check">
+              <input type="checkbox" id="wheel-autoscale" checked>
+              Auto-Skalierung
+            </label>
+          </div>
+          <p class="status-line" id="wheel-status">Bereit</p>
+        </fieldset>
+
+        <div class="chart-grid">
+          <div class="chart-box">
+            <h3 class="chart-title">Radwinkel über Zeit</h3>
+            <canvas id="chart-angle"></canvas>
+            <p class="chart-legend">
+              <span class="key key-raw"></span>Unkalibriert
+              <span class="key key-cal"></span>Kalibriert
+            </p>
+          </div>
+          <div class="chart-box">
+            <h3 class="chart-title">Magnetwerte X / Y</h3>
+            <canvas id="chart-xy"></canvas>
+            <p class="chart-legend">
+              <span class="key key-raw"></span>Rohwerte
+              <span class="key key-cal"></span>Kalibriert
+            </p>
+          </div>
+        </div>
+
+        <fieldset class="group">
+          <legend>Kalibrierparameter</legend>
+          <div class="param-grid">
+            <label class="param">
+              <span>Offset X</span>
+              <input type="number" class="num" id="cal-offset-x"
+                     min="-32768" max="32767" value="0">
+            </label>
+            <label class="param">
+              <span>Offset Z</span>
+              <input type="number" class="num" id="cal-offset-z"
+                     min="-32768" max="32767" value="0">
+            </label>
+            <label class="param">
+              <span>Amplitude X</span>
+              <input type="number" class="num" id="cal-ampl-x"
+                     min="0" max="32767" value="1">
+            </label>
+            <label class="param">
+              <span>Amplitude Z</span>
+              <input type="number" class="num" id="cal-ampl-z"
+                     min="0" max="32767" value="1">
+            </label>
+            <label class="param">
+              <span>Press Trigger (mT)</span>
+              <input type="number" class="num" id="cal-press"
+                     min="0" max="10000" value="0">
+            </label>
+            <label class="param">
+              <span>Ellipsis-Winkel (°)</span>
+              <input type="number" class="num" id="cal-angle"
+                     min="-180" max="180" value="0">
+            </label>
+          </div>
+          <p class="hint">
+            Grün hinterlegte Felder entsprechen den aktuell im Flash der
+            Maus gespeicherten Werten. Übertragen werden 14 Bytes:
+            fünf 16-Bit-Ganzzahlen sowie ein 32-Bit-Gleitkommawert.
+          </p>
+        </fieldset>
+
+        <div class="toolbar">
+          <button type="button" class="btn" id="btn-cal-load">
+            Aktuelle Werte laden
+          </button>
+          <button type="button" class="btn" id="btn-cal-start">
+            Kalibrierung starten
+          </button>
+          <button type="button" class="btn btn-ghost" id="btn-cal-reset">
+            Felder zurücksetzen
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-cal-upload">
+            Werte hochladen
+          </button>
+        </div>
+      </div>
+    </details>
+
+    <!-- ─── Erweiterte Einstellungen ─────────────── -->
+    <details class="card hidden" id="advanced-card">
+      <summary class="card-head">Erweitert: Sensor-Schalter &amp; Trigger</summary>
+      <div class="card-body">
+        <p class="hint">
+          Diese Charakteristiken werden von der Firmware bereitgestellt und
+          steuern die Aktivierung der Tastensensorik sowie die analogen
+          Trigger-Werte. Sie werden nur eingeblendet, wenn die Maus die
+          entsprechenden GATT-Merkmale anbietet.
+        </p>
+
+        <fieldset class="group">
+          <legend>Sensor-Schalter</legend>
+          <div class="toolbar">
+            <label class="check">
+              <input type="checkbox" id="sensor-left" checked>
+              Linker Sensor aktiv
+            </label>
+            <label class="check">
+              <input type="checkbox" id="sensor-right" checked>
+              Rechter Sensor aktiv
+            </label>
+            <button type="button" class="btn btn-primary" id="btn-sensor-apply">
+              Übernehmen
+            </button>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Trigger-Werte (0 &ndash; 255)</legend>
+          <div class="row">
+            <label for="trigger-left">Links</label>
+            <input type="range" id="trigger-left" min="0" max="255" value="0">
+            <input type="number" class="num" id="trigger-left-value"
+                   min="0" max="255" value="0">
+          </div>
+          <div class="row">
+            <label for="trigger-right">Rechts</label>
+            <input type="range" id="trigger-right" min="0" max="255" value="0">
+            <input type="number" class="num" id="trigger-right-value"
+                   min="0" max="255" value="0">
+          </div>
+          <div class="toolbar">
+            <button type="button" class="btn btn-primary" id="btn-trigger-apply">
+              Übernehmen
+            </button>
+          </div>
+        </fieldset>
+
+        <p class="status-line" id="advanced-status">Bereit</p>
+      </div>
+    </details>
+
+    <!-- ─── Ereignisprotokoll ────────────────────── -->
+    <details class="card" id="log-card">
+      <summary class="card-head">Ereignisprotokoll</summary>
+      <div class="card-body">
+        <div class="log-box" id="log-box"></div>
+        <button type="button" class="clear-btn" id="btn-clear-log">
+          Protokoll leeren
+        </button>
+      </div>
+    </details>
+
+  </main>
+
+  <!-- ─── Fußzeile ───────────────────────────────── -->
+  <footer class="ifx-footer">
+    <div class="ifx-footer-inner">
+      <p class="ifx-footer-claim">
+        Part of your life. Part of tomorrow.
+      </p>
+      <p class="ifx-footer-note">
+        Diese Anwendung ist eine technische Demonstration und
+        dient ausschließlich Präsentationszwecken.
+      </p>
+      <p class="ifx-footer-legal">
+        &copy; 2026 Infineon Technologies AG &middot;
+        Alle Rechte vorbehalten
+      </p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
