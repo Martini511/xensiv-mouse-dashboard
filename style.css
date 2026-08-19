@@ -204,6 +204,7 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .press-track { position: relative; height: 12px; background: #eef1f1; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .press-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); transition: width .05s linear; }
 .press-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--signal); transform: translateX(-50%); }
+.press-scale { display: flex; justify-content: space-between; margin-top: 5px; color: var(--muted); font: 10px "IBM Plex Mono", monospace; }
 
 /* ─── Werkzeugleiste ─────────────────────────────── */
 
@@ -224,6 +225,11 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .toggle span::after { content: ""; display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
 .toggle input:checked + span { background: var(--accent); }
 .toggle input:checked + span::after { transform: translateX(16px); }
+
+.live-state { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.live-state i { width: 9px; height: 9px; border-radius: 50%; background: #c3cacb; }
+.live-state.is-running { color: var(--ink); }
+.live-state.is-running i { background: var(--accent-soft); box-shadow: 0 0 0 4px #12a19026; animation: pulse 1.4s infinite; }
 
 .stream-controls { display: flex; align-items: center; gap: 12px; }
 .stream-controls label { color: var(--muted); font-size: 12px; }

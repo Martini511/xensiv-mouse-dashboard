@@ -38,7 +38,7 @@
     </nav>
 
     <!-- ═══ Live-Überwachung ═══════════════════════ -->
-    <div class="panel panel-live" data-panel="live">
+    <div class="panel panel-live" data-panel="live" id="live-panel">
       <div class="live-shell">
 
         <aside class="device-stage">
@@ -92,11 +92,9 @@
           </div>
 
           <div class="toolbar">
-            <label class="toggle">
-              <input id="monitor-live" type="checkbox" data-device-control><span></span>Live-&Uuml;berwachung
-            </label>
+            <span class="live-state" id="live-state"><i></i>Nicht verbunden</span>
             <div class="stream-controls">
-              <label>Rate <input id="sample-rate" type="number" min="1" max="100" value="20" data-device-control> Hz</label>
+              <label>Radrate <input id="sample-rate" type="number" min="1" max="100" value="20" data-device-control> Hz</label>
               <button id="clear-charts" class="text-button">Diagramme leeren</button>
             </div>
           </div>

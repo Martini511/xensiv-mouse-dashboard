@@ -17,15 +17,21 @@ const connectionLabel = byId("connection-label");
 const batteryLabel = byId("battery-level");
 const toast = byId("toast");
 
-// Die Live-Ansicht fragt Tastendruck und Radwerte getrennt ab: Der
-// Tastendruck lohnt eine hohe Rate, die Radwerte speisen zusätzlich
-// die Diagramme und laufen deshalb mit einstellbarer Frequenz.
+// Die Live-Ansicht fragt Tastendruck und Radwerte in einer einzigen
+// Schleife ab. Zwei unabhängige Zeitgeber würden sich gegenseitig
+// aushängen: Sowohl GATT als auch WebHID lassen nur eine Abfrage
+// gleichzeitig zu, und die schnellere hätte die Sperre praktisch
+// dauerhaft belegt.
 const PRESSURE_INTERVAL = 50;
 
-let pressureTimer = null;
-let wheelTimer = null;
+let monitoring = false;
 let batteryTimer = null;
-let requestPending = false;
+
+// Die Sensoren liefern deutlich kleinere Werte als die möglichen 127.
+// Die Balken würden sonst kaum ausschlagen, deshalb wächst die Skala
+// mit dem größten bisher gesehenen Wert mit.
+const PRESS_SCALE_MIN = 24;
+let pressScale = PRESS_SCALE_MIN;
 
 const pressBars = new Map();
 
@@ -44,7 +50,17 @@ function selectTab(name) {
   });
 
   // Die Zeichenfläche kennt ihre Größe erst, wenn sie sichtbar ist.
-  if (name === "live") charts.draw();
+  if (name !== "live") {
+    stopMonitoring();
+    return;
+  }
+
+  charts.draw();
+  startMonitoring();
+}
+
+function liveTabActive() {
+  return !byId("live-panel").hidden;
 }
 
 // ─── Verbindung ───────────────────────────────────────
@@ -93,18 +109,23 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
   batteryTimer = window.setInterval(updateBattery, 30000);
 
   // Die eingestellten Schwellwerte bestimmen, ab wann eine Taste in
-  // der Live-Ansicht aufleuchtet – deshalb gleich mitlesen.
+  // der Live-Ansicht aufleuchtet. Scheitert das Lesen, blieben die
+  // Vorgabewerte stehen und die Anzeige wäre irreführend – deshalb
+  // wird der Fehler gemeldet statt verschluckt.
   try {
     populateButtonConfig(await mouse.readButtonConfig());
-  } catch {
-    // Ältere Firmware ohne lesbare Konfiguration
+  } catch (error) {
+    showError(new Error(
+      `Tastenkonfiguration nicht lesbar: ${error.message}. ` +
+      `Die angezeigten Schwellwerte stammen aus der Voreinstellung.`));
   }
 
   notify("Maus verbunden");
+  if (liveTabActive()) startMonitoring();
 });
 
 mouse.addEventListener("disconnected", () => {
-  stopPolling();
+  stopMonitoring();
   window.clearInterval(batteryTimer);
   batteryTimer = null;
   setDeviceControls(false);
@@ -137,64 +158,64 @@ window.addEventListener("pagehide", () => mouse.release());
 window.addEventListener("beforeunload", () => mouse.release());
 
 // ─── Live-Überwachung ─────────────────────────────────
-
-byId("monitor-live").addEventListener("change", ({ target }) => {
-  if (target.checked) startMonitoring();
-  else stopPolling();
-});
-
-byId("sample-rate").addEventListener("change", () => {
-  if (wheelTimer) startWheelTimer();
-});
+// Läuft, solange der Reiter offen und die Maus verbunden ist.
 
 byId("clear-charts").addEventListener("click", () => charts.clear());
 
 function startMonitoring() {
-  window.clearInterval(pressureTimer);
-  pressureTimer = window.setInterval(updatePressure, PRESSURE_INTERVAL);
-  startWheelTimer();
+  if (monitoring || !mouse.connected) return;
+
+  monitoring = true;
+  setLiveState("is-running", "Live-Überwachung läuft");
+  monitorLoop();
 }
 
-function startWheelTimer() {
-  window.clearInterval(wheelTimer);
+function stopMonitoring() {
+  monitoring = false;
+  setLiveState("", mouse.connected
+    ? "Live-Überwachung angehalten"
+    : "Nicht verbunden");
+}
+
+function wheelInterval() {
   const frequency = Math.max(1, Math.min(100, Number(byId("sample-rate").value)));
-  wheelTimer = window.setInterval(updateWheel, 1000 / frequency);
+  return 1000 / frequency;
 }
 
-function stopPolling() {
-  window.clearInterval(pressureTimer);
-  window.clearInterval(wheelTimer);
-  pressureTimer = null;
-  wheelTimer = null;
-  byId("monitor-live").checked = false;
-}
+async function monitorLoop() {
+  let nextWheel = 0;
 
-async function updatePressure() {
-  if (requestPending || !mouse.connected) return;
-  requestPending = true;
+  while (monitoring && mouse.connected) {
+    try {
+      showPressure(await mouse.readButtonPressure());
 
-  try {
-    showPressure(await mouse.readButtonPressure());
-  } catch (error) {
-    stopPolling();
-    showError(error);
-  } finally {
-    requestPending = false;
+      // Die Radwerte speisen zusätzlich die Diagramme und laufen
+      // deshalb mit eigener, einstellbarer Frequenz.
+      const now = Date.now();
+      if (now >= nextWheel) {
+        showWheel(await mouse.readWheelValues());
+        nextWheel = now + wheelInterval();
+      }
+    } catch (error) {
+      stopMonitoring();
+      showError(error);
+      return;
+    }
+
+    await delay(PRESSURE_INTERVAL);
   }
+
+  stopMonitoring();
 }
 
-async function updateWheel() {
-  if (requestPending || !mouse.connected) return;
-  requestPending = true;
+function setLiveState(modifier, label) {
+  const element = byId("live-state");
+  element.className = `live-state ${modifier}`.trim();
+  element.lastChild.textContent = label;
+}
 
-  try {
-    showWheel(await mouse.readWheelValues());
-  } catch (error) {
-    stopPolling();
-    showError(error);
-  } finally {
-    requestPending = false;
-  }
+function delay(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 // ─── Anzeige der Messwerte ────────────────────────────
@@ -214,7 +235,8 @@ function buildPressBars() {
       <div class="press-track">
         <div class="press-fill" data-role="fill"></div>
         <div class="press-marker" data-role="marker"></div>
-      </div>`;
+      </div>
+      <div class="press-scale"><span>0</span><span data-role="scale">${PRESS_SCALE_MIN}</span></div>`;
 
     list.appendChild(item);
     pressBars.set(key, {
@@ -223,6 +245,7 @@ function buildPressBars() {
       threshold: item.querySelector('[data-role="threshold"]'),
       fill: item.querySelector('[data-role="fill"]'),
       marker: item.querySelector('[data-role="marker"]'),
+      scale: item.querySelector('[data-role="scale"]'),
     });
   });
 }
@@ -230,6 +253,10 @@ function buildPressBars() {
 function showPressure(values) {
   let leftPressed = false;
   let rightPressed = false;
+
+  // Skala zuerst nachziehen, sonst bezögen sich die Balken eines
+  // Durchlaufs auf zwei verschiedene Bezugsgrößen.
+  pressScale = Math.max(pressScale, ...SENSOR_KEYS.map((key) => values[key]));
 
   SENSOR_KEYS.forEach((key) => {
     const bar = pressBars.get(key);
@@ -240,8 +267,9 @@ function showPressure(values) {
 
     bar.value.textContent = pressure;
     bar.threshold.textContent = threshold;
-    bar.fill.style.width = `${(pressure / 127) * 100}%`;
-    bar.marker.style.left = `${(threshold / 127) * 100}%`;
+    bar.scale.textContent = pressScale;
+    bar.fill.style.width = `${percentOfScale(pressure)}%`;
+    bar.marker.style.left = `${percentOfScale(threshold)}%`;
     bar.item.classList.toggle("is-triggered", triggered);
     bar.item.classList.toggle("is-off", !enabled);
 
@@ -256,6 +284,10 @@ function showPressure(values) {
   const left = Math.max(values.leftForce, values.leftHall);
   const right = Math.max(values.rightForce, values.rightHall);
   byId("stage-press").textContent = `${left} / ${right}`;
+}
+
+function percentOfScale(value) {
+  return Math.min(100, (value / pressScale) * 100);
 }
 
 function showWheel(sample) {
@@ -282,8 +314,12 @@ function resetLiveReadouts() {
   byId("stage-wheel").textContent = "–";
   byId("stage-press").textContent = "– / –";
 
+  // Die Skala gehört zur Messreihe und beginnt mit ihr von vorn.
+  pressScale = PRESS_SCALE_MIN;
+
   pressBars.forEach((bar) => {
     bar.value.textContent = "--";
+    bar.scale.textContent = pressScale;
     bar.fill.style.width = "0%";
     bar.item.classList.remove("is-triggered");
   });
@@ -469,6 +505,7 @@ buildPressBars();
 setDeviceControls(false);
 previewLed(byId("led-color").value);
 resetLiveReadouts();
+stopMonitoring();
 charts.draw();
 
 byId("stage-transport").textContent = useHid ? "WEBHID · REPORT 0x10" : "BLE / GATT";
