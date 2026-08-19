@@ -1,6 +1,7 @@
 /* XENSIV™ Maus Konfigurator
-   Aufbau nach der Referenzoberfläche, Farbwelt und Typografie nach
-   Infineon: Ocean als Leitfarbe, Orange als Signalfarbe für Rohwerte. */
+   Zwei Ansichten: Live-Überwachung und Konfiguration.
+   Farbwelt nach Infineon – Ocean als Leitfarbe, Orange als Signalfarbe
+   für Rohwerte, dunkle Bühne für das Gerätemodell. */
 
 :root {
   --paper: #f2f5f5;
@@ -14,6 +15,7 @@
   --signal: #eb7000;
   --danger: #cd2f2f;
   --stage: #0b2e33;
+  --stage-line: #1b444a;
   --led-glow: #12a190;
 }
 
@@ -86,12 +88,39 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
 .text-button { background: transparent; color: var(--accent-dark); padding-inline: 8px; }
 .text-button:hover:not(:disabled) { text-decoration: underline; }
 
-/* ─── Grundraster ────────────────────────────────── */
+/* ─── Grundraster und Reiter ─────────────────────── */
 
-.app-shell {
+.app-shell { min-height: calc(100vh - 76px); background: var(--surface); }
+
+.tabs {
+  display: flex;
+  height: 64px;
+  gap: 30px;
+  padding: 0 clamp(22px, 4vw, 54px);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tabs button { position: relative; border: 0; background: transparent; color: var(--muted); font-weight: 700; }
+.tabs button.active { color: var(--ink); }
+.tabs button.active::after { content: ""; position: absolute; height: 3px; left: 0; right: 0; bottom: -1px; background: var(--accent); }
+
+.panel { padding: 40px clamp(22px, 5vw, 72px) 64px; animation: reveal .35s ease-out both; }
+.panel-live { padding: 0; }
+
+.section-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
+.eyebrow, .section-index, .control-title { color: var(--accent-dark); font: 600 10px "IBM Plex Mono", monospace; }
+h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; }
+.section-index { color: #aeb4b5; font-size: 18px; }
+.subhead { margin: 36px 0 14px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.hint { margin: 16px 0 0; color: var(--muted); font-size: 13px; }
+
+/* ─── Live-Ansicht ───────────────────────────────── */
+
+.live-shell {
   display: grid;
-  grid-template-columns: minmax(340px, 42%) minmax(520px, 58%);
-  min-height: calc(100vh - 76px);
+  grid-template-columns: minmax(320px, 38%) minmax(520px, 62%);
+  min-height: calc(100vh - 140px);
 }
 
 .device-stage {
@@ -100,8 +129,8 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 680px;
-  padding: 30px clamp(24px, 4vw, 58px);
+  gap: 24px;
+  padding: 30px clamp(24px, 3vw, 48px);
   background: var(--stage);
   color: #fff;
 }
@@ -117,7 +146,7 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
   background-size: 48px 48px;
 }
 
-.stage-label, .device-readout {
+.stage-label {
   position: relative;
   z-index: 1;
   display: flex;
@@ -127,61 +156,119 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
   font: 500 10px "IBM Plex Mono", monospace;
 }
 
-.mouse-image-wrap {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  height: min(62vh, 570px);
-}
+.mouse-stage { position: relative; z-index: 1; display: grid; place-items: center; }
+.mouse-svg { display: block; width: 100%; max-width: 240px; height: auto; }
 
-/* Kein Prozentwert: Die Rasterzeile richtet sich nach dem Inhalt,
-   eine prozentuale Höhenschranke bliebe deshalb wirkungslos. */
-.mouse-image-wrap img {
-  position: relative;
-  z-index: 2;
-  max-width: min(78%, 340px);
-  max-height: min(57vh, 520px);
-  object-fit: contain;
-  filter: drop-shadow(0 28px 30px #0008);
-  animation: reveal .7s ease-out both;
-}
+.mouse-body { fill: #16383e; stroke: #2f5b62; stroke-width: 3; stroke-linejoin: round; }
+.mouse-btn { fill: #1c454c; stroke: #2f5b62; stroke-width: 2; transition: fill .1s ease; }
+.mouse-btn.is-pressed { fill: var(--accent-soft); }
+.mouse-wheel { fill: #2b5a61; stroke: #3d7079; stroke-width: 2; }
+.mouse-wheel-mark { stroke: var(--accent-soft); stroke-width: 3; stroke-linecap: round; }
+/* Der Drehpunkt steckt bereits im rotate()-Attribut; eine zusätzliche
+   transform-origin würde ihn ein zweites Mal anwenden. */
+#mouse-wheel-group { transition: transform .08s linear; }
 
-/* Der Ring nimmt die eingestellte LED-Farbe auf. */
-.mouse-aura {
-  position: absolute;
-  width: 64%;
-  aspect-ratio: 1;
-  border: 1px solid color-mix(in srgb, var(--led-glow) 45%, transparent);
-  border-radius: 50%;
-  box-shadow: inset 0 0 70px color-mix(in srgb, var(--led-glow) 40%, transparent);
-  transition: border-color .3s, box-shadow .3s;
-}
+.mouse-led { fill: #123037; stroke: #2f5b62; stroke-width: 2; transition: fill .15s ease; }
+.mouse-glow { fill: transparent; opacity: 0; filter: blur(18px); transition: opacity .15s ease, fill .15s ease; }
+.mouse-label { fill: #6d9298; font-family: inherit; font-size: 15px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
 
-.workspace { min-width: 0; background: var(--surface); }
+.stage-readout { position: relative; z-index: 1; display: grid; gap: 8px; }
+.stage-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 8px; border-top: 1px solid var(--stage-line); }
+.stage-line span { color: #9fb3b5; font: 500 10px "IBM Plex Mono", monospace; }
+.stage-line strong { display: inline-flex; align-items: center; gap: 8px; font: 600 15px "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+.stage-swatch { width: 13px; height: 13px; border-radius: 2px; background: var(--led-glow); box-shadow: 0 0 10px var(--led-glow); }
 
-/* ─── Registerkarten ─────────────────────────────── */
+.live-values { min-width: 0; padding: 40px clamp(22px, 4vw, 60px) 64px; }
 
-.tabs {
+/* ─── Messwertkarten ─────────────────────────────── */
+
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 24px; }
+.metric-card { background: var(--surface); padding: 18px 20px; display: grid; gap: 2px; }
+.metric-card span { color: var(--accent-dark); font: 600 10px "IBM Plex Mono", monospace; }
+.metric-card strong { font: 600 clamp(19px, 1.7vw, 26px) "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.metric-card small { color: var(--muted); font-size: 11px; }
+
+/* ─── Druckbalken ────────────────────────────────── */
+
+.press-list { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.press-item { background: var(--surface); padding: 14px 20px; }
+.press-item.is-off { opacity: .5; }
+
+.press-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.press-name { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; font-size: 14px; }
+.press-dot { width: 9px; height: 9px; border-radius: 50%; background: #c3cacb; transition: background .1s, box-shadow .1s; }
+.press-item.is-triggered .press-dot { background: var(--accent-soft); box-shadow: 0 0 0 4px #12a19026; }
+.press-values { color: var(--muted); font: 500 11px "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+.press-values b { color: var(--ink); }
+
+.press-track { position: relative; height: 12px; background: #eef1f1; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.press-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); transition: width .05s linear; }
+.press-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--signal); transform: translateX(-50%); }
+
+/* ─── Werkzeugleiste ─────────────────────────────── */
+
+.toolbar {
+  min-height: 58px;
   display: flex;
-  height: 64px;
-  gap: 30px;
-  padding: 0 clamp(22px, 4vw, 54px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
-.tabs button { position: relative; border: 0; background: transparent; color: var(--muted); font-weight: 700; }
-.tabs button.active { color: var(--ink); }
-.tabs button.active::after { content: ""; position: absolute; height: 3px; left: 0; right: 0; bottom: -1px; background: var(--accent); }
+.toggle { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; }
+.toggle input { position: absolute; opacity: 0; }
+.toggle span { width: 34px; height: 18px; border-radius: 9px; background: #b8bdbd; padding: 2px; }
+.toggle span::after { content: ""; display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.toggle input:checked + span { background: var(--accent); }
+.toggle input:checked + span::after { transform: translateX(16px); }
 
-.panel { padding: 40px clamp(22px, 5vw, 72px) 64px; animation: reveal .35s ease-out both; }
+.stream-controls { display: flex; align-items: center; gap: 12px; }
+.stream-controls label { color: var(--muted); font-size: 12px; }
+.stream-controls input { width: 56px; padding: 7px; border: 1px solid var(--line); }
 
-.section-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
-.section-heading.compact { margin-top: 50px; }
-.eyebrow, .section-index, .control-title { color: var(--accent-dark); font: 600 10px "IBM Plex Mono", monospace; }
-h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; }
-h2 { font-size: 26px; }
-.section-index { color: #aeb4b5; font-size: 18px; }
+/* ─── Diagramme ──────────────────────────────────── */
+
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.chart-grid canvas { width: 100%; height: 260px; background: #fbfcfb; }
+
+/* ─── Konfiguration: Aufklappbereiche ────────────── */
+
+.accordion { border: 1px solid var(--line); border-bottom: 0; background: var(--surface); }
+.accordion:last-of-type { border-bottom: 1px solid var(--line); }
+
+.accordion > summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 24px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+
+.accordion > summary::-webkit-details-marker { display: none; }
+.accordion > summary::after {
+  content: "";
+  margin-left: auto;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg) translate(-3px, -3px);
+  transition: transform .2s;
+}
+.accordion[open] > summary::after { transform: rotate(-135deg) translate(-3px, -3px); }
+.accordion[open] > summary { border-bottom: 1px solid var(--line); }
+.accordion > summary:hover { background: #f7f9f9; }
+
+.accordion-index { color: #aeb4b5; font: 600 14px "IBM Plex Mono", monospace; }
+.accordion-title { display: grid; gap: 2px; font-size: 17px; }
+.accordion-title small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.accordion-body { padding: 24px; }
+.accordion-body > .toolbar:first-child { border-top: 0; padding-top: 0; }
 
 /* ─── Erscheinungsbild ───────────────────────────── */
 
@@ -210,52 +297,20 @@ h2 { font-size: 26px; }
 input[type="range"] { accent-color: var(--accent); width: 100%; }
 .range-labels { grid-column: 2; display: flex; justify-content: space-between; color: var(--muted); font: 10px "IBM Plex Mono", monospace; }
 
-/* ─── Werkzeugleiste ─────────────────────────────── */
-
-.toolbar {
-  min-height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.toggle { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; }
-.toggle input { position: absolute; opacity: 0; }
-.toggle span { width: 34px; height: 18px; border-radius: 9px; background: #b8bdbd; padding: 2px; }
-.toggle span::after { content: ""; display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
-.toggle input:checked + span { background: var(--accent); }
-.toggle input:checked + span::after { transform: translateX(16px); }
-
 /* ─── Tastensensorik ─────────────────────────────── */
 
-.sensor-list { border-bottom: 1px solid var(--line); }
-.sensor-row { display: grid; grid-template-columns: minmax(130px, 1fr) 1.6fr 1.6fr 50px; align-items: center; gap: 20px; min-height: 76px; border-top: 1px solid var(--line); }
-.sensor-row:first-child { border-top: 0; }
+.sensor-list { border: 1px solid var(--line); border-top: 0; }
+.sensor-row { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr 50px; align-items: center; gap: 20px; min-height: 66px; padding: 0 20px; border-top: 1px solid var(--line); }
 .sensor-row label { font-weight: 700; }
-.sensor-row small { display: block; color: var(--muted); font-weight: 400; }
+.sensor-row label small { display: block; color: var(--muted); font-weight: 400; }
 .sensor-header { min-height: 42px; color: var(--muted); font: 500 10px "IBM Plex Mono", monospace; text-transform: uppercase; }
 .sensor-row.muted { opacity: .5; }
-.pressure, .threshold { display: flex; align-items: center; gap: 10px; }
-.pressure progress { width: 100%; height: 8px; accent-color: var(--accent); }
-.pressure output, .threshold output { min-width: 28px; font: 500 11px "IBM Plex Mono", monospace; }
+.threshold { display: flex; align-items: center; gap: 10px; }
+.threshold output { min-width: 28px; font: 500 11px "IBM Plex Mono", monospace; }
 .sensor-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); }
 
 /* ─── Radkalibrierung ────────────────────────────── */
 
-.stream-controls, .angle-readout { display: flex; align-items: center; gap: 12px; }
-.stream-controls label { color: var(--muted); font-size: 12px; }
-.stream-controls input { width: 56px; padding: 7px; border: 1px solid var(--line); }
-.angle-readout span { color: var(--muted); font: 10px "IBM Plex Mono", monospace; }
-.angle-readout strong { color: var(--ink); font-size: 15px; }
-
-.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 24px; }
-.chart-grid canvas { width: 100%; height: 280px; background: #fbfcfb; }
-
-.calibration-panel { border: 1px solid var(--line); border-top: 0; padding: 24px; }
 .calibration-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .calibration-fields label { color: var(--muted); font-size: 11px; }
 .calibration-fields input { width: 100%; display: block; margin-top: 6px; border: 0; border-bottom: 1px solid var(--line); padding: 8px 2px; color: var(--ink); background: transparent; font-family: "IBM Plex Mono", monospace; }
@@ -287,32 +342,31 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 
 /* ─── Anpassung an kleine Anzeigen ───────────────── */
 
+@media (max-width: 1100px) {
+  .metric-grid { grid-template-columns: 1fr 1fr; }
+}
+
 @media (max-width: 960px) {
-  .app-shell { grid-template-columns: 1fr; }
-  .device-stage { min-height: 440px; }
-  .mouse-image-wrap { height: 330px; }
-  .mouse-image-wrap img { max-height: 310px; }
+  .live-shell { grid-template-columns: 1fr; min-height: 0; }
+  .device-stage { padding: 24px; }
+  .mouse-svg { max-width: 190px; }
 }
 
 @media (max-width: 640px) {
   .app-header { height: auto; min-height: 74px; padding: 12px 16px; }
   .connection-label, .battery { display: none; }
-  .app-shell { min-height: calc(100vh - 74px); }
-  .device-stage { min-height: 330px; padding: 20px; }
-  .mouse-image-wrap { height: 240px; }
-  .mouse-image-wrap img { max-height: 230px; }
-  .device-readout { display: none; }
   .tabs { overflow-x: auto; height: 58px; gap: 22px; padding: 0 18px; }
   .tabs button { flex: 0 0 auto; }
   .panel { padding: 30px 18px 48px; }
-  .control-grid.two-columns, .chart-grid { grid-template-columns: 1fr; }
+  .live-values { padding: 30px 18px 48px; }
+  .metric-grid, .control-grid.two-columns, .chart-grid, .calibration-fields { grid-template-columns: 1fr; }
   .control-block + .control-block { border-left: 0; border-top: 1px solid var(--line); }
-  .sensor-row { grid-template-columns: 1fr 44px; padding: 14px 0; gap: 12px; }
-  .sensor-row .pressure, .sensor-row .threshold { grid-column: 1 / -1; }
+  .sensor-row { grid-template-columns: 1fr 44px; padding: 14px 20px; gap: 12px; }
+  .sensor-row .threshold { grid-column: 1 / -1; }
   .sensor-header { display: none; }
   .toolbar { align-items: flex-start; flex-direction: column; }
-  .calibration-fields { grid-template-columns: 1fr 1fr; }
-  .calibration-actions { flex-wrap: wrap; justify-content: stretch; }
+  .calibration-actions { flex-wrap: wrap; }
   .calibration-actions button { flex: 1 1 auto; }
-  .chart-grid canvas { height: 240px; }
+  .chart-grid canvas { height: 220px; }
+  .accordion-body { padding: 18px; }
 }

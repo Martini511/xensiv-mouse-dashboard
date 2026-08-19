@@ -1,6 +1,6 @@
 import { XensivMouseBluetooth } from "./bluetooth.js";
 import { WheelCharts } from "./charts.js";
-import { SENSOR_KEYS } from "./protocol.js";
+import { SENSOR_KEYS, SENSOR_LABELS } from "./protocol.js";
 
 const bluetooth = new XensivMouseBluetooth();
 const charts = new WheelCharts(byId("angle-chart"), byId("field-chart"));
@@ -10,12 +10,19 @@ const connectionLabel = byId("connection-label");
 const batteryLabel = byId("battery-level");
 const toast = byId("toast");
 
+// Die Live-Ansicht fragt Tastendruck und Radwerte getrennt ab: Der
+// Tastendruck lohnt eine hohe Rate, die Radwerte speisen zusätzlich
+// die Diagramme und laufen deshalb mit einstellbarer Frequenz.
+const PRESSURE_INTERVAL = 50;
+
 let pressureTimer = null;
 let wheelTimer = null;
 let batteryTimer = null;
 let requestPending = false;
 
-// ─── Registerkarten ───────────────────────────────────
+const pressBars = new Map();
+
+// ─── Reiter ───────────────────────────────────────────
 
 document.querySelectorAll("[data-tab]").forEach((button) => {
   button.addEventListener("click", () => selectTab(button.dataset.tab));
@@ -28,6 +35,9 @@ function selectTab(name) {
   document.querySelectorAll("[data-panel]").forEach((panel) => {
     panel.hidden = panel.dataset.panel !== name;
   });
+
+  // Die Zeichenfläche kennt ihre Größe erst, wenn sie sichtbar ist.
+  if (name === "live") charts.draw();
 }
 
 // ─── Verbindung ───────────────────────────────────────
@@ -75,6 +85,14 @@ bluetooth.addEventListener("connected", async ({ detail: device }) => {
   window.clearInterval(batteryTimer);
   batteryTimer = window.setInterval(updateBattery, 30000);
 
+  // Die eingestellten Schwellwerte bestimmen, ab wann eine Taste in
+  // der Live-Ansicht aufleuchtet – deshalb gleich mitlesen.
+  try {
+    populateButtonConfig(await bluetooth.readButtonConfig());
+  } catch {
+    // Ältere Firmware ohne lesbare Konfiguration
+  }
+
   notify("Maus verbunden");
 });
 
@@ -86,6 +104,7 @@ bluetooth.addEventListener("disconnected", () => {
   setConnectionState("offline", "Nicht verbunden");
   setConnectButton("Maus verbinden");
   batteryLabel.textContent = "--";
+  resetLiveReadouts();
 });
 
 bluetooth.addEventListener("reconnecting", () => {
@@ -101,7 +120,6 @@ bluetooth.addEventListener("notice", ({ detail }) => {
   notify(detail.message, Boolean(detail.error));
 });
 
-// Der Browser drosselt Zeitgeber in inaktiven Tabs stark.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") bluetooth.resume();
 });
@@ -111,11 +129,169 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => bluetooth.release());
 window.addEventListener("beforeunload", () => bluetooth.release());
 
-// ─── Erscheinungsbild ─────────────────────────────────
+// ─── Live-Überwachung ─────────────────────────────────
 
-byId("led-color").addEventListener("input", ({ target }) => {
-  previewLed(target.value);
+byId("monitor-live").addEventListener("change", ({ target }) => {
+  if (target.checked) startMonitoring();
+  else stopPolling();
 });
+
+byId("sample-rate").addEventListener("change", () => {
+  if (wheelTimer) startWheelTimer();
+});
+
+byId("clear-charts").addEventListener("click", () => charts.clear());
+
+function startMonitoring() {
+  window.clearInterval(pressureTimer);
+  pressureTimer = window.setInterval(updatePressure, PRESSURE_INTERVAL);
+  startWheelTimer();
+}
+
+function startWheelTimer() {
+  window.clearInterval(wheelTimer);
+  const frequency = Math.max(1, Math.min(100, Number(byId("sample-rate").value)));
+  wheelTimer = window.setInterval(updateWheel, 1000 / frequency);
+}
+
+function stopPolling() {
+  window.clearInterval(pressureTimer);
+  window.clearInterval(wheelTimer);
+  pressureTimer = null;
+  wheelTimer = null;
+  byId("monitor-live").checked = false;
+}
+
+async function updatePressure() {
+  if (requestPending || !bluetooth.connected) return;
+  requestPending = true;
+
+  try {
+    showPressure(await bluetooth.readButtonPressure());
+  } catch (error) {
+    stopPolling();
+    showError(error);
+  } finally {
+    requestPending = false;
+  }
+}
+
+async function updateWheel() {
+  if (requestPending || !bluetooth.connected) return;
+  requestPending = true;
+
+  try {
+    showWheel(await bluetooth.readWheelValues());
+  } catch (error) {
+    stopPolling();
+    showError(error);
+  } finally {
+    requestPending = false;
+  }
+}
+
+// ─── Anzeige der Messwerte ────────────────────────────
+
+function buildPressBars() {
+  const list = byId("press-list");
+
+  SENSOR_KEYS.forEach((key) => {
+    const item = document.createElement("div");
+    item.className = "press-item";
+
+    item.innerHTML = `
+      <div class="press-head">
+        <span class="press-name"><i class="press-dot"></i>${SENSOR_LABELS[key]}</span>
+        <span class="press-values">Druck <b data-role="value">--</b> · Schwelle <b data-role="threshold">--</b></span>
+      </div>
+      <div class="press-track">
+        <div class="press-fill" data-role="fill"></div>
+        <div class="press-marker" data-role="marker"></div>
+      </div>`;
+
+    list.appendChild(item);
+    pressBars.set(key, {
+      item,
+      value: item.querySelector('[data-role="value"]'),
+      threshold: item.querySelector('[data-role="threshold"]'),
+      fill: item.querySelector('[data-role="fill"]'),
+      marker: item.querySelector('[data-role="marker"]'),
+    });
+  });
+}
+
+function showPressure(values) {
+  let leftPressed = false;
+  let rightPressed = false;
+
+  SENSOR_KEYS.forEach((key) => {
+    const bar = pressBars.get(key);
+    const pressure = values[key];
+    const threshold = thresholdOf(key);
+    const enabled = byId(`${key}-enabled`).checked;
+    const triggered = enabled && pressure > 0 && pressure >= threshold;
+
+    bar.value.textContent = pressure;
+    bar.threshold.textContent = threshold;
+    bar.fill.style.width = `${(pressure / 127) * 100}%`;
+    bar.marker.style.left = `${(threshold / 127) * 100}%`;
+    bar.item.classList.toggle("is-triggered", triggered);
+    bar.item.classList.toggle("is-off", !enabled);
+
+    if (!triggered) return;
+    if (key.startsWith("left")) leftPressed = true;
+    else rightPressed = true;
+  });
+
+  byId("mouse-btn-left").classList.toggle("is-pressed", leftPressed);
+  byId("mouse-btn-right").classList.toggle("is-pressed", rightPressed);
+
+  const left = Math.max(values.leftForce, values.leftHall);
+  const right = Math.max(values.rightForce, values.rightHall);
+  byId("stage-press").textContent = `${left} / ${right}`;
+}
+
+function showWheel(sample) {
+  charts.add(sample);
+
+  byId("raw-angle").textContent = sample.rawAngle;
+  byId("calibrated-angle").textContent = sample.calibratedAngle;
+  byId("field-cal").textContent = `${sample.calibratedX} / ${sample.calibratedZ}`;
+  byId("field-raw").textContent = `${sample.rawX} / ${sample.rawZ}`;
+
+  byId("stage-wheel").textContent = `${sample.calibratedAngle}°`;
+  byId("mouse-wheel-group").setAttribute(
+    "transform", `rotate(${sample.calibratedAngle} 120 73)`);
+}
+
+function resetLiveReadouts() {
+  ["raw-angle", "calibrated-angle"].forEach((id) => {
+    byId(id).textContent = "--";
+  });
+  ["field-cal", "field-raw"].forEach((id) => {
+    byId(id).textContent = "-- / --";
+  });
+
+  byId("stage-wheel").textContent = "–";
+  byId("stage-press").textContent = "– / –";
+
+  pressBars.forEach((bar) => {
+    bar.value.textContent = "--";
+    bar.fill.style.width = "0%";
+    bar.item.classList.remove("is-triggered");
+  });
+
+  byId("mouse-btn-left").classList.remove("is-pressed");
+  byId("mouse-btn-right").classList.remove("is-pressed");
+}
+
+function thresholdOf(key) {
+  return Number(byId(`${key}-threshold`).value);
+}
+
+// ─── Beleuchtung ──────────────────────────────────────
+
+byId("led-color").addEventListener("input", ({ target }) => previewLed(target.value));
 byId("apply-led").addEventListener("click", () => applyLed(byId("led-color").value));
 
 document.querySelectorAll("[data-color]").forEach((button) => {
@@ -125,25 +301,42 @@ document.querySelectorAll("[data-color]").forEach((button) => {
 byId("motion-led").addEventListener("click", () => run(
   () => bluetooth.setLed(255, 255, 255), "Bewegungslicht eingeschaltet"));
 
-byId("dpi").addEventListener("input", ({ target }) => {
-  byId("dpi-value").textContent = target.value;
-});
-byId("dpi").addEventListener("change", ({ target }) => run(
-  () => bluetooth.setDpi(Number(target.value)),
-  `Auflösung auf ${target.value} DPI gesetzt`));
-
 async function applyLed(hex) {
-  const rgb = hex.match(/[a-f\d]{2}/gi).map((part) => Number.parseInt(part, 16));
+  const rgb = toRgb(hex);
   previewLed(hex);
   await run(() => bluetooth.setLed(...rgb), `LED auf ${hex.toUpperCase()} gesetzt`);
 }
 
 function previewLed(hex) {
+  const [red, green, blue] = toRgb(hex);
+  const off = red === 0 && green === 0 && blue === 0;
+
   byId("led-color").value = hex;
   byId("led-swatch").style.background = hex;
   byId("led-value").textContent = hex.toUpperCase();
+
   document.documentElement.style.setProperty("--led-glow", hex);
+  byId("stage-led").lastChild.textContent = hex.toUpperCase();
+
+  // Das Modell zeigt die Farbe unmittelbar: erloschene LED bleibt grau.
+  byId("mouse-led").style.fill = off ? "" : hex;
+  byId("mouse-glow").style.fill = off ? "transparent" : hex;
+  byId("mouse-glow").style.opacity = off ? "0" : ".55";
 }
+
+function toRgb(hex) {
+  return hex.match(/[a-f\d]{2}/gi).map((part) => Number.parseInt(part, 16));
+}
+
+// ─── Zeigerauflösung ──────────────────────────────────
+
+byId("dpi").addEventListener("input", ({ target }) => {
+  byId("dpi-value").textContent = target.value;
+});
+
+byId("dpi").addEventListener("change", ({ target }) => run(
+  () => bluetooth.setDpi(Number(target.value)),
+  `Auflösung auf ${target.value} DPI gesetzt`));
 
 // ─── Tastensensorik ───────────────────────────────────
 
@@ -155,15 +348,10 @@ byId("save-buttons").addEventListener("click", () => run(
   () => bluetooth.writeButtonConfig(readButtonConfig()),
   "Tasteneinstellungen gespeichert"));
 
-byId("monitor-buttons").addEventListener("change", ({ target }) => {
-  window.clearInterval(pressureTimer);
-  pressureTimer = target.checked ? window.setInterval(updatePressure, 50) : null;
-});
-
 function readButtonConfig() {
   return Object.fromEntries(SENSOR_KEYS.map((key) => [key, {
     enabled: byId(`${key}-enabled`).checked,
-    threshold: Number(byId(`${key}-threshold`).value),
+    threshold: thresholdOf(key),
   }]));
 }
 
@@ -172,34 +360,11 @@ function populateButtonConfig(config) {
     byId(`${key}-enabled`).checked = config[key].enabled;
     byId(`${key}-threshold`).value = config[key].threshold;
     byId(`${key}-threshold-value`).textContent = config[key].threshold;
+    pressBars.get(key).threshold.textContent = config[key].threshold;
   });
 }
 
-async function updatePressure() {
-  if (requestPending || !bluetooth.connected) return;
-  requestPending = true;
-
-  try {
-    const values = await bluetooth.readButtonPressure();
-    SENSOR_KEYS.forEach((key) => {
-      byId(`${key}-pressure`).value = values[key];
-      byId(`${key}-pressure-value`).textContent = values[key];
-    });
-  } catch (error) {
-    stopPolling();
-    showError(error);
-  } finally {
-    requestPending = false;
-  }
-}
-
 // ─── Radkalibrierung ──────────────────────────────────
-
-byId("stream-wheel").addEventListener("click", toggleWheelStream);
-byId("clear-charts").addEventListener("click", () => charts.clear());
-byId("sample-rate").addEventListener("change", () => {
-  if (wheelTimer) restartWheelStream();
-});
 
 byId("load-calibration").addEventListener("click", () => run(async () => {
   populateCalibration(await bluetooth.readCalibration());
@@ -212,40 +377,6 @@ byId("save-calibration").addEventListener("click", () => run(
 byId("start-calibration").addEventListener("click", () => run(
   () => bluetooth.startCalibration(),
   "Kalibrierung gestartet. Bitte das Rad einmal vollständig drehen."));
-
-function toggleWheelStream() {
-  if (wheelTimer) {
-    window.clearInterval(wheelTimer);
-    wheelTimer = null;
-    byId("stream-wheel").textContent = "Aufzeichnung starten";
-  } else {
-    restartWheelStream();
-    byId("stream-wheel").textContent = "Aufzeichnung stoppen";
-  }
-}
-
-function restartWheelStream() {
-  window.clearInterval(wheelTimer);
-  const frequency = Math.max(1, Math.min(100, Number(byId("sample-rate").value)));
-  wheelTimer = window.setInterval(updateWheel, 1000 / frequency);
-}
-
-async function updateWheel() {
-  if (requestPending || !bluetooth.connected) return;
-  requestPending = true;
-
-  try {
-    const sample = await bluetooth.readWheelValues();
-    charts.add(sample);
-    byId("raw-angle").textContent = sample.rawAngle;
-    byId("calibrated-angle").textContent = sample.calibratedAngle;
-  } catch (error) {
-    stopPolling();
-    showError(error);
-  } finally {
-    requestPending = false;
-  }
-}
 
 function readCalibration() {
   return {
@@ -289,15 +420,6 @@ async function updateBattery() {
   }
 }
 
-function stopPolling() {
-  window.clearInterval(pressureTimer);
-  window.clearInterval(wheelTimer);
-  pressureTimer = null;
-  wheelTimer = null;
-  byId("monitor-buttons").checked = false;
-  byId("stream-wheel").textContent = "Aufzeichnung starten";
-}
-
 function setDeviceControls(enabled) {
   document.querySelectorAll("[data-device-control]").forEach((element) => {
     element.disabled = !enabled;
@@ -336,8 +458,10 @@ function byId(id) {
 
 // ─── Start ────────────────────────────────────────────
 
+buildPressBars();
 setDeviceControls(false);
 previewLed(byId("led-color").value);
+resetLiveReadouts();
 charts.draw();
 
 if (!bluetooth.available) {
@@ -347,7 +471,6 @@ if (!bluetooth.available) {
     "Web Bluetooth steht nur in Chrome, Edge oder Opera zur Verfügung " +
     "und benötigt HTTPS oder localhost.", true);
 } else {
-  // Bereits freigegebene Geräte ohne Auswahldialog aufnehmen.
   bluetooth.knownDevices().then(async (devices) => {
     if (devices.length === 0) return;
 
