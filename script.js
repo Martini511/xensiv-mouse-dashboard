@@ -129,10 +129,15 @@ const state = {
   // deshalb der Normalfall und kein Fehler.
   userDisconnect: false,
   reconnect: {
-    active:   false,
-    timer:    null,
-    attempts: 0,
-    watching: false
+    active:     false,
+    timer:      null,
+    ticker:     null,
+    since:      0,
+    attempts:   0,
+    connecting: false,
+    watching:   false,
+    watcher:    null,
+    onAdvertisement: null
   },
   resume: {
     monitoring: false,
@@ -513,6 +518,22 @@ async function connectGatt(device, attempts) {
   throw lastError;
 }
 
+// Geduldiger Verbindungsaufbau für den Ruhezustand.
+//
+// Chrome hält einen Verbindungswunsch offen, bis das Gerät wieder
+// erreichbar ist. Ein Zeitlimit ist hier schädlich: Es bricht die
+// laufende GATT-Operation nicht ab, verwirft aber deren Ergebnis.
+// Die schlafende Maus meldet sich dann zwar beim Betriebssystem
+// zurück, die Seite bekommt davon jedoch nichts mehr mit.
+async function connectGattPatient(device) {
+  addLog('[BLE] Verbindungswunsch offen – wartet auf die Maus');
+
+  const server = await device.gatt.connect();
+
+  addLog(`[BLE] GATT-Server erreicht (verbunden: ${device.gatt.connected})`);
+  return server;
+}
+
 async function connectToDevice(device, options) {
   const settings = options || {};
 
@@ -528,9 +549,19 @@ async function connectToDevice(device, options) {
   device.addEventListener('gattserverdisconnected', onDisconnected);
 
   try {
-    // Beim Wiederverbinden genügt ein Versuch – die äußere Schleife
-    // probiert es ohnehin geduldig weiter.
-    state.server = await connectGatt(device, settings.reconnect ? 1 : null);
+    if (settings.reconnect) {
+      // Kein Zeitlimit: Der Verbindungswunsch bleibt bestehen, bis die
+      // Maus aufwacht. Die Marke erlaubt es, ihn bei „Trennen“ gezielt
+      // wieder abzuräumen.
+      state.reconnect.connecting = true;
+      try {
+        state.server = await connectGattPatient(device);
+      } finally {
+        state.reconnect.connecting = false;
+      }
+    } else {
+      state.server = await connectGatt(device, null);
+    }
 
     // Windows braucht nach dem Verbindungsaufbau kurz Zeit,
     // bevor die GATT-Dienste bereitstehen.
@@ -1179,20 +1210,51 @@ async function resumeLiveViews() {
 // wechselt. Sie meldet sich erst wieder, wenn sie bewegt wird –
 // deshalb wird im Hintergrund geduldig weiterprobiert.
 
-const RECONNECT_DELAYS = [1500, 3000, 5000, 8000, 12000];
+const RECONNECT_DELAYS = [1000, 2000, 4000, 6000, 10000];
 
 function reconnectDelay(attempt) {
   return RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)];
 }
 
+function reconnectWaitText() {
+  const seconds = Math.max(
+    0, Math.round((Date.now() - state.reconnect.since) / 1000));
+
+  const minutes = Math.floor(seconds / 60);
+  const rest    = String(seconds % 60).padStart(2, '0');
+
+  return `Warte auf die Maus … (${minutes}:${rest})`;
+}
+
 function cancelReconnect() {
+  const wasConnecting = state.reconnect.connecting;
+
   if (state.reconnect.timer !== null) {
     window.clearTimeout(state.reconnect.timer);
     state.reconnect.timer = null;
   }
 
-  state.reconnect.active   = false;
-  state.reconnect.attempts = 0;
+  if (state.reconnect.ticker !== null) {
+    window.clearInterval(state.reconnect.ticker);
+    state.reconnect.ticker = null;
+  }
+
+  state.reconnect.active     = false;
+  state.reconnect.attempts   = 0;
+  state.reconnect.since      = 0;
+  state.reconnect.connecting = false;
+
+  stopAdvertisementWatch();
+
+  // Ein noch offener Verbindungswunsch muss aktiv abgeräumt werden,
+  // sonst verbindet sich die Maus später unbemerkt im Hintergrund.
+  if (wasConnecting && state.device && !state.connected) {
+    try {
+      state.device.gatt.disconnect();
+    } catch (ignored) {
+      // Es gab nichts abzubrechen
+    }
+  }
 }
 
 function startReconnect() {
@@ -1200,86 +1262,146 @@ function startReconnect() {
 
   state.reconnect.active   = true;
   state.reconnect.attempts = 0;
+  state.reconnect.since    = Date.now();
 
   $('btn-disconnect').disabled = false;
   setConnectError(
     'Die Maus hat sich abgemeldet – vermutlich Ruhezustand. Die Seite ' +
-    'verbindet sich automatisch neu, sobald die Maus wieder aktiv ist. ' +
-    'Bewegen Sie die Maus oder drücken Sie eine Taste. Über „Trennen“ ' +
-    'lässt sich das Warten beenden.',
+    'hält den Verbindungswunsch offen und meldet sich automatisch zurück, ' +
+    'sobald die Maus wieder aktiv ist. Bewegen Sie die Maus oder drücken ' +
+    'Sie eine Taste. Über „Trennen“ lässt sich das Warten beenden.',
     'busy'
   );
 
+  setStatus(false, reconnectWaitText());
+
+  state.reconnect.ticker = window.setInterval(() => {
+    if (!state.reconnect.active || state.connected) return;
+    setStatus(false, reconnectWaitText());
+  }, 1000);
+
   watchForAdvertisements();
-  scheduleReconnect();
+
+  // Direkt im Trennungsereignis lehnt Windows einen neuen
+  // Verbindungswunsch gelegentlich ab – kurz durchatmen.
+  state.reconnect.timer = window.setTimeout(() => {
+    state.reconnect.timer = null;
+    attemptReconnect();
+  }, 800);
 }
 
 function scheduleReconnect() {
   if (!state.reconnect.active) return;
+  if (state.reconnect.timer !== null) return;
 
   const delay = reconnectDelay(state.reconnect.attempts);
 
-  setStatus(false,
-    `Warte auf die Maus … (Versuch ${state.reconnect.attempts + 1})`);
-
-  state.reconnect.timer = window.setTimeout(attemptReconnect, delay);
+  state.reconnect.timer = window.setTimeout(() => {
+    state.reconnect.timer = null;
+    attemptReconnect();
+  }, delay);
 }
 
 async function attemptReconnect() {
   if (!state.reconnect.active || !state.device) return;
+  if (state.reconnect.connecting) return;
 
-  state.reconnect.timer = null;
+  if (state.reconnect.timer !== null) {
+    window.clearTimeout(state.reconnect.timer);
+    state.reconnect.timer = null;
+  }
+
   state.reconnect.attempts += 1;
-
   const attempt = state.reconnect.attempts;
-  setStatus(false, `Wiederverbindung läuft … (Versuch ${attempt})`);
 
-  const connected = await connectToDevice(state.device, {
-    silent:    true,
-    reconnect: true
-  });
+  addLog(`[BLE] Wiederverbindung – Versuch ${attempt}`);
+
+  let connected = false;
+
+  try {
+    connected = await connectToDevice(state.device, {
+      silent:    true,
+      reconnect: true
+    });
+  } catch (error) {
+    addLog(`[ERR] Wiederverbindung: ${error.name} – ${error.message}`);
+  }
+
+  // Zwischenzeitlich über „Trennen“ beendet.
+  if (!state.reconnect.active) return;
 
   if (connected) {
     addLog(`[OK]  Wiederverbindung nach ${attempt} Versuch(en)`);
     cancelReconnect();
+    setConnectError('');
     return;
   }
 
-  if (attempt % 10 === 0) {
-    addLog(`[!]   Maus meldet sich nicht (${attempt} Versuche)`);
-  }
-
+  addLog(`[!]   Versuch ${attempt} erfolglos – neuer Anlauf folgt`);
   scheduleReconnect();
 }
 
 // Chrome meldet über dieses Ereignis, sobald die Maus wieder wirbt.
-// Dann lohnt ein sofortiger Versuch statt des nächsten Zeitfensters.
+// Das ist nur eine Beschleunigung: Der offene Verbindungswunsch
+// greift auch ohne Werbepakete.
 async function watchForAdvertisements() {
   const device = state.device;
 
   if (!device || state.reconnect.watching) return;
-  if (typeof device.watchAdvertisements !== 'function') return;
+
+  if (typeof device.watchAdvertisements !== 'function') {
+    addLog('[!]   Aktivitätsüberwachung wird vom Browser nicht angeboten');
+    return;
+  }
 
   const onAdvertisement = () => {
     if (!state.reconnect.active) return;
 
-    addLog('[BLE] Maus ist wieder aktiv – verbinde sofort');
+    addLog('[BLE] Maus wirbt wieder');
 
-    if (state.reconnect.timer !== null) {
-      window.clearTimeout(state.reconnect.timer);
-      state.reconnect.timer = null;
-      attemptReconnect();
-    }
+    // Läuft bereits ein Verbindungswunsch, erledigt der den Rest.
+    if (state.reconnect.connecting) return;
+
+    attemptReconnect();
   };
+
+  const controller = new AbortController();
 
   try {
     device.addEventListener('advertisementreceived', onAdvertisement);
-    await device.watchAdvertisements();
+
+    state.reconnect.watcher         = controller;
+    state.reconnect.onAdvertisement = onAdvertisement;
+
+    await device.watchAdvertisements({ signal: controller.signal });
     state.reconnect.watching = true;
   } catch (error) {
     device.removeEventListener('advertisementreceived', onAdvertisement);
+
+    state.reconnect.watcher         = null;
+    state.reconnect.onAdvertisement = null;
+
     addLog(`[!]   Aktivitätsüberwachung nicht möglich: ${error.name}`);
   }
+}
+
+function stopAdvertisementWatch() {
+  if (state.reconnect.onAdvertisement && state.device) {
+    state.device.removeEventListener(
+      'advertisementreceived', state.reconnect.onAdvertisement);
+  }
+
+  if (state.reconnect.watcher) {
+    try {
+      state.reconnect.watcher.abort();
+    } catch (ignored) {
+      // Überwachung lief nicht mehr
+    }
+  }
+
+  state.reconnect.watcher         = null;
+  state.reconnect.onAdvertisement = null;
+  state.reconnect.watching        = false;
 }
 
 // ─── Batteriestand ────────────────────────────────────
