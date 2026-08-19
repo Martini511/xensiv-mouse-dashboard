@@ -1,8 +1,15 @@
+import { XensivMouseHid } from "./webhid.js";
 import { XensivMouseBluetooth } from "./bluetooth.js";
 import { WheelCharts } from "./charts.js";
 import { SENSOR_KEYS, SENSOR_LABELS } from "./protocol.js";
 
-const bluetooth = new XensivMouseBluetooth();
+// WebHID ist der bevorzugte Weg: Die Maus beantwortet dort jeden
+// Befehl über einen einzigen Feature-Report, ohne Dienstsuche und
+// ohne die Eigenheiten der BLE-Verbindung. Fehlt die Schnittstelle,
+// übernimmt der GATT-Transport.
+const useHid = typeof navigator.hid?.requestDevice === "function";
+const mouse = useHid ? new XensivMouseHid() : new XensivMouseBluetooth();
+
 const charts = new WheelCharts(byId("angle-chart"), byId("field-chart"));
 const connectButton = byId("connect-button");
 const resetButton = byId("reset-button");
@@ -43,8 +50,8 @@ function selectTab(name) {
 // ─── Verbindung ───────────────────────────────────────
 
 connectButton.addEventListener("click", async () => {
-  if (bluetooth.connected || bluetooth.reconnecting) {
-    bluetooth.disconnect();
+  if (mouse.connected || mouse.reconnecting) {
+    mouse.disconnect();
     return;
   }
 
@@ -52,7 +59,7 @@ connectButton.addEventListener("click", async () => {
   setConnectionState("searching", "Maus auswählen");
 
   try {
-    await bluetooth.connect();
+    await mouse.connect();
   } catch (error) {
     setConnectionState("offline", "Nicht verbunden");
     showError(error);
@@ -66,7 +73,7 @@ resetButton.addEventListener("click", async () => {
   setConnectionState("searching", "Wird zurückgesetzt");
 
   try {
-    await bluetooth.reset();
+    await mouse.reset();
   } catch (error) {
     setConnectionState("offline", "Nicht verbunden");
     showError(error);
@@ -75,7 +82,7 @@ resetButton.addEventListener("click", async () => {
   }
 });
 
-bluetooth.addEventListener("connected", async ({ detail: device }) => {
+mouse.addEventListener("connected", async ({ detail: device }) => {
   setDeviceControls(true);
   setConnectionState("online", device.name || "XENSIV Maus");
   setConnectButton("Trennen");
@@ -88,7 +95,7 @@ bluetooth.addEventListener("connected", async ({ detail: device }) => {
   // Die eingestellten Schwellwerte bestimmen, ab wann eine Taste in
   // der Live-Ansicht aufleuchtet – deshalb gleich mitlesen.
   try {
-    populateButtonConfig(await bluetooth.readButtonConfig());
+    populateButtonConfig(await mouse.readButtonConfig());
   } catch {
     // Ältere Firmware ohne lesbare Konfiguration
   }
@@ -96,7 +103,7 @@ bluetooth.addEventListener("connected", async ({ detail: device }) => {
   notify("Maus verbunden");
 });
 
-bluetooth.addEventListener("disconnected", () => {
+mouse.addEventListener("disconnected", () => {
   stopPolling();
   window.clearInterval(batteryTimer);
   batteryTimer = null;
@@ -107,7 +114,7 @@ bluetooth.addEventListener("disconnected", () => {
   resetLiveReadouts();
 });
 
-bluetooth.addEventListener("reconnecting", () => {
+mouse.addEventListener("reconnecting", () => {
   setConnectionState("waiting", "Warte auf die Maus");
   setConnectButton("Warten beenden");
   resetButton.hidden = false;
@@ -116,18 +123,18 @@ bluetooth.addEventListener("reconnecting", () => {
     "Bewegen Sie die Maus; die Verbindung stellt sich selbst wieder her.");
 });
 
-bluetooth.addEventListener("notice", ({ detail }) => {
+mouse.addEventListener("notice", ({ detail }) => {
   notify(detail.message, Boolean(detail.error));
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") bluetooth.resume();
+  if (document.visibilityState === "visible") mouse.resume();
 });
 
-// Ohne ausdrückliche Freigabe bleibt die Verbindung nach einem Neuladen
-// hängen und die Maus verweigert jeden neuen Aufbau.
-window.addEventListener("pagehide", () => bluetooth.release());
-window.addEventListener("beforeunload", () => bluetooth.release());
+// Ohne ausdrückliche Freigabe bleibt der Kanal nach einem Neuladen
+// belegt und die Maus verweigert jeden neuen Zugriff.
+window.addEventListener("pagehide", () => mouse.release());
+window.addEventListener("beforeunload", () => mouse.release());
 
 // ─── Live-Überwachung ─────────────────────────────────
 
@@ -163,11 +170,11 @@ function stopPolling() {
 }
 
 async function updatePressure() {
-  if (requestPending || !bluetooth.connected) return;
+  if (requestPending || !mouse.connected) return;
   requestPending = true;
 
   try {
-    showPressure(await bluetooth.readButtonPressure());
+    showPressure(await mouse.readButtonPressure());
   } catch (error) {
     stopPolling();
     showError(error);
@@ -177,11 +184,11 @@ async function updatePressure() {
 }
 
 async function updateWheel() {
-  if (requestPending || !bluetooth.connected) return;
+  if (requestPending || !mouse.connected) return;
   requestPending = true;
 
   try {
-    showWheel(await bluetooth.readWheelValues());
+    showWheel(await mouse.readWheelValues());
   } catch (error) {
     stopPolling();
     showError(error);
@@ -299,12 +306,12 @@ document.querySelectorAll("[data-color]").forEach((button) => {
 });
 
 byId("motion-led").addEventListener("click", () => run(
-  () => bluetooth.setLed(255, 255, 255), "Bewegungslicht eingeschaltet"));
+  () => mouse.setLed(255, 255, 255), "Bewegungslicht eingeschaltet"));
 
 async function applyLed(hex) {
   const rgb = toRgb(hex);
   previewLed(hex);
-  await run(() => bluetooth.setLed(...rgb), `LED auf ${hex.toUpperCase()} gesetzt`);
+  await run(() => mouse.setLed(...rgb), `LED auf ${hex.toUpperCase()} gesetzt`);
 }
 
 function previewLed(hex) {
@@ -335,17 +342,17 @@ byId("dpi").addEventListener("input", ({ target }) => {
 });
 
 byId("dpi").addEventListener("change", ({ target }) => run(
-  () => bluetooth.setDpi(Number(target.value)),
+  () => mouse.setDpi(Number(target.value)),
   `Auflösung auf ${target.value} DPI gesetzt`));
 
 // ─── Tastensensorik ───────────────────────────────────
 
 byId("load-buttons").addEventListener("click", () => run(async () => {
-  populateButtonConfig(await bluetooth.readButtonConfig());
+  populateButtonConfig(await mouse.readButtonConfig());
 }, "Tasteneinstellungen geladen"));
 
 byId("save-buttons").addEventListener("click", () => run(
-  () => bluetooth.writeButtonConfig(readButtonConfig()),
+  () => mouse.writeButtonConfig(readButtonConfig()),
   "Tasteneinstellungen gespeichert"));
 
 function readButtonConfig() {
@@ -367,15 +374,15 @@ function populateButtonConfig(config) {
 // ─── Radkalibrierung ──────────────────────────────────
 
 byId("load-calibration").addEventListener("click", () => run(async () => {
-  populateCalibration(await bluetooth.readCalibration());
+  populateCalibration(await mouse.readCalibration());
 }, "Kalibrierung geladen"));
 
 byId("save-calibration").addEventListener("click", () => run(
-  () => bluetooth.writeCalibration(readCalibration()),
+  () => mouse.writeCalibration(readCalibration()),
   "Kalibrierung gespeichert"));
 
 byId("start-calibration").addEventListener("click", () => run(
-  () => bluetooth.startCalibration(),
+  () => mouse.startCalibration(),
   "Kalibrierung gestartet. Bitte das Rad einmal vollständig drehen."));
 
 function readCalibration() {
@@ -413,7 +420,7 @@ async function run(operation, successMessage) {
 
 async function updateBattery() {
   try {
-    const battery = await bluetooth.readBattery();
+    const battery = await mouse.readBattery();
     batteryLabel.textContent = battery === null ? "--" : `${battery} %`;
   } catch {
     batteryLabel.textContent = "--";
@@ -464,26 +471,29 @@ previewLed(byId("led-color").value);
 resetLiveReadouts();
 charts.draw();
 
-if (!bluetooth.available) {
+byId("stage-transport").textContent = useHid ? "WEBHID · REPORT 0x10" : "BLE / GATT";
+
+if (!mouse.available) {
   connectButton.disabled = true;
   setConnectionState("offline", "Nicht unterstützt");
   notify(
-    "Web Bluetooth steht nur in Chrome, Edge oder Opera zur Verfügung " +
-    "und benötigt HTTPS oder localhost.", true);
+    "Weder WebHID noch Web Bluetooth stehen zur Verfügung. Bitte ein " +
+    "aktuelles Chrome, Edge oder Opera über HTTPS oder localhost nutzen.",
+    true);
 } else {
-  bluetooth.knownDevices().then(async (devices) => {
+  mouse.knownDevices().then(async (devices) => {
     if (devices.length === 0) return;
 
     resetButton.hidden = false;
     setConnectionState("searching", "Verbinde automatisch");
 
     try {
-      await bluetooth.connectKnown();
+      await mouse.connectKnown();
     } catch {
-      // Der erste Anlauf schlägt fehl, solange der Browser die alte
-      // Verbindung noch abbaut oder die Maus schläft. Statt aufzugeben
+      // Der erste Anlauf schlägt fehl, solange der Browser den alten
+      // Zugriff noch abbaut oder die Maus schläft. Statt aufzugeben
       // wird geduldig weiterprobiert.
-      bluetooth.startReconnect();
+      mouse.startReconnect();
     }
   });
 }
