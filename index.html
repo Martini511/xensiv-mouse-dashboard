@@ -70,11 +70,14 @@
         Verbinden Sie die XENSIV&trade; Maus wie gewohnt mit dem
         Betriebssystem. Danach genügt einmalig die Freigabe im Browser;
         jeder weitere Aufruf dieser Seite erkennt die Maus automatisch.
-        Der Auswahldialog zeigt bewusst alle Geräte an: Eine bereits
-        verbundene Maus sendet keine Advertisements mehr, weshalb Filter
-        auf Name oder Dienst nicht greifen können. Voraussetzung ist ein
-        Chromium-basierter Browser (Chrome, Edge, Opera) sowie ein Aufruf
-        über HTTPS oder <code>localhost</code>.
+        Taucht die Maus im Auswahldialog nicht auf, entfernen Sie den
+        Haken bei der Einschränkung: Eine bereits verbundene Maus sendet
+        keine Advertisements mehr, weshalb Filter dann nicht greifen.
+        Antwortet die Maus gar nicht mehr, hilft
+        &bdquo;Verbindung zurücksetzen&ldquo; – ein Neustart der Maus ist
+        dafür nicht nötig. Voraussetzung ist ein Chromium-basierter
+        Browser (Chrome, Edge, Opera) sowie ein Aufruf über HTTPS oder
+        <code>localhost</code>.
       </p>
 
       <div class="known-devices hidden" id="known-devices">
@@ -88,6 +91,10 @@
         </button>
         <button type="button" class="btn" id="btn-disconnect" disabled>
           Trennen
+        </button>
+        <button type="button" class="btn" id="btn-reset-link"
+                title="Bestehende Verbindung freigeben und neu aufbauen – hilft, wenn die Maus nicht mehr antwortet">
+          Verbindung zurücksetzen
         </button>
         <button type="button" class="btn btn-ghost" id="btn-refresh-known">
           Geräteliste aktualisieren

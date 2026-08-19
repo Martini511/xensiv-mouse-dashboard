@@ -124,6 +124,7 @@ const state = {
   discoveryTimedOut: false,
   connected: false,
   batteryTimer: null,
+  linkTimer: null,
 
   // Die Maus schaltet im Leerlauf ab. Ein Verbindungsabbruch ist
   // deshalb der Normalfall und kein Fehler.
@@ -952,8 +953,30 @@ async function autoConnect() {
   const device = devices.find(entry => entry.id === preferred) ||
                  devices[0];
 
+  // Nach einem Neuladen hält der Browser gelegentlich noch Reste der
+  // Verbindung des vorherigen Seitenaufrufs. Erst freigeben, dann neu
+  // aufbauen – sonst läuft der erste Versuch zwangsläufig ins Leere.
+  if (device.gatt && device.gatt.connected) {
+    addLog('[BLE] Rest einer früheren Verbindung wird freigegeben');
+    releaseDevice(device);
+    await wait(800);
+  }
+
   setStatus(false, `Verbinde automatisch mit ${deviceLabel(device)} …`);
-  await connectToDevice(device, { silent: true });
+
+  const connected = await connectToDevice(device, { silent: true });
+
+  // Schlägt der erste Anlauf fehl – etwa weil der Browser die alte
+  // Verbindung noch abbaut oder die Maus gerade schläft – wird nicht
+  // aufgegeben. Sonst müsste die Maus von Hand neu gestartet werden.
+  if (!connected && !state.connected && $('opt-autoconnect').checked) {
+    addLog('[!]   Erster Anlauf fehlgeschlagen – Verbindungswunsch bleibt offen');
+    startReconnect(
+      'Die Maus ist noch nicht erreichbar. Die Seite hält den ' +
+      'Verbindungswunsch offen und meldet sich automatisch, sobald die ' +
+      'Maus antwortet. Bewegen Sie die Maus oder drücken Sie eine Taste. ' +
+      'Über „Trennen“ lässt sich das Warten beenden.');
+  }
 }
 
 // ─── Diagnose ─────────────────────────────────────────
@@ -1257,7 +1280,7 @@ function cancelReconnect() {
   }
 }
 
-function startReconnect() {
+function startReconnect(reason) {
   if (state.reconnect.active) return;
 
   state.reconnect.active   = true;
@@ -1266,6 +1289,7 @@ function startReconnect() {
 
   $('btn-disconnect').disabled = false;
   setConnectError(
+    reason ||
     'Die Maus hat sich abgemeldet – vermutlich Ruhezustand. Die Seite ' +
     'hält den Verbindungswunsch offen und meldet sich automatisch zurück, ' +
     'sobald die Maus wieder aktiv ist. Bewegen Sie die Maus oder drücken ' +
@@ -1402,6 +1426,80 @@ function stopAdvertisementWatch() {
   state.reconnect.watcher         = null;
   state.reconnect.onAdvertisement = null;
   state.reconnect.watching        = false;
+}
+
+// ─── Verbindung freigeben und zurücksetzen ────────────
+// Die Maus lässt nur eine GATT-Verbindung zu. Bleibt beim Verlassen
+// der Seite ein Rest davon bestehen, weist sie jeden weiteren Aufbau
+// ab – bis sie neu gestartet wird. Deshalb wird die Verbindung immer
+// aktiv freigegeben, nie einfach liegen gelassen.
+
+function releaseDevice(device) {
+  if (!device || !device.gatt) return false;
+
+  try {
+    device.gatt.disconnect();
+    return true;
+  } catch (ignored) {
+    return false;
+  }
+}
+
+function releaseOnUnload() {
+  stopButtonMonitoring();
+  stopWheelStreaming();
+
+  state.userDisconnect = true;
+  cancelReconnect();
+  releaseDevice(state.device);
+}
+
+// Erzwungener Neuaufbau – die Alternative zum Neustart der Maus.
+async function resetLink() {
+  const known  = state.device ? [state.device] : await getKnownDevices();
+  const device = known[0];
+
+  if (!device) {
+    setConnectError(
+      'Es ist noch keine Maus freigegeben. Bitte zunächst ' +
+      '„Maus suchen & freigeben“ verwenden.', 'error');
+    return;
+  }
+
+  addLog('[BLE] Verbindung wird zurückgesetzt');
+  setStatus(false, 'Verbindung wird zurückgesetzt …');
+
+  state.userDisconnect = true;
+  cancelReconnect();
+  stopButtonMonitoring();
+  stopWheelStreaming();
+  releaseDevice(device);
+
+  // Der Maus Zeit geben, die alte Verbindung ihrerseits abzuräumen.
+  await wait(1500);
+  state.userDisconnect = false;
+
+  const connected = await connectToDevice(device, { silent: true });
+
+  if (!connected && !state.connected) {
+    startReconnect(
+      'Die Maus antwortet noch nicht. Der Verbindungswunsch bleibt offen – ' +
+      'bewegen Sie die Maus oder drücken Sie eine Taste. Über „Trennen“ ' +
+      'lässt sich das Warten beenden.');
+  }
+}
+
+// Chrome meldet den Verlust der Verbindung nicht in jedem Fall –
+// besonders nicht, während der Tab im Hintergrund lag. Ein
+// regelmäßiger Abgleich deckt solche stillen Abbrüche auf.
+function checkLinkHealth() {
+  if (!state.connected || !state.device) return;
+
+  const alive = Boolean(state.device.gatt && state.device.gatt.connected);
+  if (alive) return;
+
+  addLog('[!]   Verbindung ohne Ereignis verloren – erkannt durch Abgleich');
+  onDisconnected();
 }
 
 // ─── Batteriestand ────────────────────────────────────
@@ -2413,6 +2511,7 @@ function initControls() {
 
   $('btn-connect').addEventListener('click', connect);
   $('btn-disconnect').addEventListener('click', disconnect);
+  $('btn-reset-link').addEventListener('click', resetLink);
   $('btn-refresh-known').addEventListener('click', autoConnect);
   $('btn-save-uuids').addEventListener('click', saveServiceUuids);
   $('btn-reset-uuids').addEventListener('click', resetServiceUuids);
@@ -2560,6 +2659,7 @@ window.addEventListener('load', async () => {
   if (!navigator.bluetooth) {
     setStatus(false, 'Web Bluetooth wird von diesem Browser nicht unterstützt');
     $('btn-connect').disabled = true;
+    $('btn-reset-link').disabled = true;
     $('btn-refresh-known').disabled = true;
     setConnectError(
       'Web Bluetooth steht nur in Chromium-basierten Browsern zur Verfügung ' +
@@ -2586,9 +2686,26 @@ window.addEventListener('load', async () => {
 
   addLog('[OK]  Bereit – suche nach bereits freigegebenen Geräten');
   await autoConnect();
+
+  state.linkTimer = window.setInterval(checkLinkHealth, 5000);
 });
 
-window.addEventListener('beforeunload', () => {
-  stopButtonMonitoring();
-  stopWheelStreaming();
+// Im Hintergrund drosselt Chrome alle Zeitgeber stark. Sobald die
+// Seite wieder sichtbar ist, wird deshalb sofort nachgesehen, statt
+// auf das nächste – womoglich weit entfernte – Zeitfenster zu warten.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+
+  checkLinkHealth();
+
+  if (state.reconnect.active && !state.reconnect.connecting) {
+    addLog('[BLE] Seite wieder im Vordergrund – neuer Anlauf');
+    attemptReconnect();
+  }
 });
+
+// Ohne ausdrückliche Freigabe bleibt die Verbindung nach einem
+// Neuladen hängen und die Maus verweigert jeden neuen Aufbau.
+// „pagehide“ greift auch dort, wo „beforeunload“ übersprungen wird.
+window.addEventListener('pagehide', releaseOnUnload);
+window.addEventListener('beforeunload', releaseOnUnload);
