@@ -94,7 +94,7 @@
           <div class="toolbar">
             <span class="live-state" id="live-state"><i></i>Nicht verbunden</span>
             <div class="stream-controls">
-              <label>Radrate <input id="sample-rate" type="number" min="1" max="100" value="20" data-device-control> Hz</label>
+              <label>Radrate <input id="sample-rate" type="number" min="1" max="100" value="10" data-device-control> Hz</label>
               <button id="clear-charts" class="text-button">Diagramme leeren</button>
             </div>
           </div>
@@ -229,7 +229,10 @@
               <input id="rightHall-enabled" type="checkbox" data-device-control aria-label="Rechts Hall aktiv">
             </div>
           </div>
-        </div>
+          <p class="hint">Die Schwellwerte wirken im Gerät selbst: Liegt eine
+          Schwelle über dem Druck, den der Sensor tatsächlich erreicht, löst
+          die Taste am ganzen Rechner nicht mehr aus – auch nach dem Schließen
+          dieser Seite. Die Live-Überwachung zeigt die erreichbaren Werte.</p>        </div>
       </details>
 
       <details class="accordion">

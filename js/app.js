@@ -22,7 +22,13 @@ const toast = byId("toast");
 // aushängen: Sowohl GATT als auch WebHID lassen nur eine Abfrage
 // gleichzeitig zu, und die schnellere hätte die Sperre praktisch
 // dauerhaft belegt.
-const PRESSURE_INTERVAL = 50;
+//
+// Wichtiger noch: Die Maus meldet ihre Tastenklicks über dieselbe
+// Funkstrecke, über die wir sie abfragen. Wer sie ununterbrochen
+// befragt, verdrängt die Eingabemeldungen – die Tasten wirken dann
+// systemweit tot. Deshalb bleibt der Kanal überwiegend frei.
+const PRESSURE_INTERVAL = 100;
+const DUTY_LIMIT = 0.35;
 
 let monitoring = false;
 let batteryTimer = null;
@@ -32,6 +38,14 @@ let batteryTimer = null;
 // mit dem größten bisher gesehenen Wert mit.
 const PRESS_SCALE_MIN = 24;
 let pressScale = PRESS_SCALE_MIN;
+
+// Höchster je Sensor beobachteter Druck. Dient als Plausibilitätsprobe
+// vor dem Schreiben: Eine Schwelle oberhalb davon macht die Taste
+// unbrauchbar – auch außerhalb dieser Seite.
+const observedMax = new Map();
+
+// Ob die angezeigte Tastenkonfiguration tatsächlich vom Gerät stammt.
+let configFromDevice = false;
 
 const pressBars = new Map();
 
@@ -132,6 +146,11 @@ mouse.addEventListener("disconnected", () => {
   setConnectionState("offline", "Nicht verbunden");
   setConnectButton("Maus verbinden");
   batteryLabel.textContent = "--";
+
+  // Die Beobachtungen gelten nur für die abgelaufene Sitzung.
+  observedMax.clear();
+  configFromDevice = false;
+
   resetLiveReadouts();
 });
 
@@ -149,7 +168,16 @@ mouse.addEventListener("notice", ({ detail }) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") mouse.resume();
+  if (document.visibilityState === "visible") {
+    mouse.resume();
+    if (liveTabActive()) startMonitoring();
+    return;
+  }
+
+  // Im Hintergrund gibt es nichts anzuzeigen. Weiterzufragen würde
+  // nur die Funkstrecke belegen und die Tasten der Maus ausbremsen,
+  // während in einem anderen Fenster gearbeitet wird.
+  stopMonitoring();
 });
 
 // Ohne ausdrückliche Freigabe bleibt der Kanal nach einem Neuladen
@@ -186,6 +214,8 @@ async function monitorLoop() {
   let nextWheel = 0;
 
   while (monitoring && mouse.connected) {
+    const startedAt = Date.now();
+
     try {
       showPressure(await mouse.readButtonPressure());
 
@@ -202,7 +232,11 @@ async function monitorLoop() {
       return;
     }
 
-    await delay(PRESSURE_INTERVAL);
+    // Pause im Verhältnis zur belegten Zeit: Antwortet die Maus
+    // träge, weil die Verbindung ausgelastet ist, wird von selbst
+    // langsamer abgefragt statt weiter nachzudrücken.
+    const busy = Date.now() - startedAt;
+    await delay(Math.max(PRESSURE_INTERVAL, busy * (1 / DUTY_LIMIT - 1)));
   }
 
   stopMonitoring();
@@ -264,6 +298,8 @@ function showPressure(values) {
     const threshold = thresholdOf(key);
     const enabled = byId(`${key}-enabled`).checked;
     const triggered = enabled && pressure > 0 && pressure >= threshold;
+
+    observedMax.set(key, Math.max(observedMax.get(key) || 0, pressure));
 
     bar.value.textContent = pressure;
     bar.threshold.textContent = threshold;
@@ -387,9 +423,58 @@ byId("load-buttons").addEventListener("click", () => run(async () => {
   populateButtonConfig(await mouse.readButtonConfig());
 }, "Tasteneinstellungen geladen"));
 
-byId("save-buttons").addEventListener("click", () => run(
-  () => mouse.writeButtonConfig(readButtonConfig()),
-  "Tasteneinstellungen gespeichert"));
+byId("save-buttons").addEventListener("click", () => {
+  const config = readButtonConfig();
+  const problems = checkButtonConfig(config);
+
+  // Eine zu hohe Schwelle oder ein abgeschalteter Sensor macht die
+  // Taste am ganzen Rechner unbrauchbar – auch nach dem Schließen
+  // dieser Seite. Deshalb hier nachfragen statt blind schreiben.
+  if (problems.length > 0) {
+    const accepted = window.confirm(
+      "Diese Einstellung kann die Maustasten unbrauchbar machen:\n\n" +
+      problems.map((problem) => `• ${problem}`).join("\n") +
+      "\n\nTrotzdem in die Maus schreiben?");
+
+    if (!accepted) return;
+  }
+
+  run(() => mouse.writeButtonConfig(config), "Tasteneinstellungen gespeichert");
+});
+
+const SIDES = {
+  "Linke Taste": ["leftForce", "leftTmr2d", "leftHall"],
+  "Rechte Taste": ["rightForce", "rightHall"],
+};
+
+function checkButtonConfig(config) {
+  const problems = [];
+
+  Object.entries(SIDES).forEach(([label, keys]) => {
+    if (!keys.some((key) => config[key].enabled)) {
+      problems.push(`${label}: kein Sensor aktiv – die Taste löst nicht mehr aus`);
+    }
+  });
+
+  SENSOR_KEYS.forEach((key) => {
+    const seen = observedMax.get(key) || 0;
+    if (!config[key].enabled || seen === 0) return;
+
+    if (config[key].threshold > seen) {
+      problems.push(
+        `${SENSOR_LABELS[key]}: Schwelle ${config[key].threshold} liegt über ` +
+        `dem höchsten gemessenen Druck ${seen}`);
+    }
+  });
+
+  if (!configFromDevice) {
+    problems.push(
+      "Die Werte wurden nie vom Gerät gelesen – es sind Voreinstellungen " +
+      "dieser Seite, nicht die der Maus");
+  }
+
+  return problems;
+}
 
 function readButtonConfig() {
   return Object.fromEntries(SENSOR_KEYS.map((key) => [key, {
@@ -399,6 +484,8 @@ function readButtonConfig() {
 }
 
 function populateButtonConfig(config) {
+  configFromDevice = true;
+
   SENSOR_KEYS.forEach((key) => {
     byId(`${key}-enabled`).checked = config[key].enabled;
     byId(`${key}-threshold`).value = config[key].threshold;
