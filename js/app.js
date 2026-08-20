@@ -338,8 +338,33 @@ function activeSensor(side) {
 }
 
 // Der Umschalter ist die Vorgabe; die Freigaben in der Konfiguration
-// folgen ihm, denn genau sie werden später ins Gerät geschrieben.
-byId("sensor-mode").addEventListener("change", applySensorMode);
+// folgen ihm. Entscheidend: Die Auswahl allein genügt nicht – erst
+// das Schreiben aktiviert den Sensor im Gerät. Vorher liefert die
+// andere Familie keine brauchbaren Messwerte. Das Desktop-Werkzeug
+// weist mit einem eigenen Hinweis genau darauf hin.
+byId("sensor-mode").addEventListener("change", async (event) => {
+  applySensorMode();
+  if (!mouse.connected) return;
+
+  const config = readButtonConfig();
+  const revert = () => {
+    event.target.checked = !event.target.checked;
+    applySensorMode();
+  };
+
+  if (!confirmButtonConfig(config)) {
+    revert();
+    return;
+  }
+
+  try {
+    await mouse.writeButtonConfig(config);
+    notify(`${sensorMode() === "hall" ? "Hall" : "Force"}-Sensorik aktiviert`);
+  } catch (error) {
+    revert();
+    showError(error);
+  }
+});
 
 function applySensorMode() {
   const mode = sensorMode();
@@ -589,22 +614,23 @@ byId("load-buttons").addEventListener("click", () => run(async () => {
 
 byId("save-buttons").addEventListener("click", () => {
   const config = readButtonConfig();
-  const problems = checkButtonConfig(config);
-
-  // Eine zu hohe Schwelle oder ein abgeschalteter Sensor macht die
-  // Taste am ganzen Rechner unbrauchbar – auch nach dem Schließen
-  // dieser Seite. Deshalb hier nachfragen statt blind schreiben.
-  if (problems.length > 0) {
-    const accepted = window.confirm(
-      "Diese Einstellung kann die Maustasten unbrauchbar machen:\n\n" +
-      problems.map((problem) => `• ${problem}`).join("\n") +
-      "\n\nTrotzdem in die Maus schreiben?");
-
-    if (!accepted) return;
-  }
+  if (!confirmButtonConfig(config)) return;
 
   run(() => mouse.writeButtonConfig(config), "Tasteneinstellungen gespeichert");
 });
+
+// Eine zu hohe Schwelle oder ein abgeschalteter Sensor macht die Taste
+// am ganzen Rechner unbrauchbar – auch nach dem Schließen dieser
+// Seite. Deshalb hier nachfragen statt blind schreiben.
+function confirmButtonConfig(config) {
+  const problems = checkButtonConfig(config);
+  if (problems.length === 0) return true;
+
+  return window.confirm(
+    "Diese Einstellung kann die Maustasten unbrauchbar machen:\n\n" +
+    problems.map((problem) => `• ${problem}`).join("\n") +
+    "\n\nTrotzdem in die Maus schreiben?");
+}
 
 const SIDE_LABELS = { left: "Linke Taste", right: "Rechte Taste" };
 
