@@ -424,30 +424,51 @@ function showWheel(sample) {
 // Schwelle liegt in einer anderen Einheit als die Rohwerte, sodass
 // der Vergleich dauerhaft anschlägt.
 //
-// Erkannt wird der Klick daher daran, dass die Länge spürbar vom
-// eingelaufenen Ruhewert abweicht – in beide Richtungen.
-const WHEEL_PRESS_MARGIN = 0.15;
+// Erkannt wird der Klick daher an der Abweichung vom eingelaufenen
+// Ruhewert. Die Auslöseschwelle richtet sich nach dem gemessenen
+// Rauschen dieses Ruhewerts: Liegt das Signal ruhig, genügt eine
+// kleine Änderung – so empfindlich wie die Maus selbst.
+const WHEEL_PRESS_SIGMA = 4;        // Vielfaches des Rauschens
+const WHEEL_PRESS_FLOOR = 0.01;     // mindestens ein Prozent des Ruhewerts
+const WHEEL_RELEASE_RATIO = 0.5;    // Loslassen erst deutlich darunter
 const WHEEL_BASELINE_WEIGHT = 0.02;
+const WHEEL_NOISE_WEIGHT = 0.05;
+const WHEEL_SETTLE_SAMPLES = 30;
 
 let wheelBaseline = null;
+let wheelNoise = 0;
+let wheelSamples = 0;
+let wheelPressed = false;
 
 function showWheelPress(sample) {
   const length = Math.hypot(sample.calibratedX, sample.calibratedZ);
   if (wheelBaseline === null) wheelBaseline = length;
 
-  const pressed = wheelBaseline > 0 &&
-    Math.abs(length - wheelBaseline) > wheelBaseline * WHEEL_PRESS_MARGIN;
+  const deviation = Math.abs(length - wheelBaseline);
+  const limit = Math.max(
+    wheelNoise * WHEEL_PRESS_SIGMA, wheelBaseline * WHEEL_PRESS_FLOOR);
+  const release = limit * WHEEL_RELEASE_RATIO;
 
-  // Der Ruhewert zieht nur nach, solange nicht gedrückt wird. Sonst
-  // würde er dem Druck folgen und die Erkennung nach kurzer Zeit
-  // wieder abschalten.
-  if (!pressed) {
+  // Erst messen, dann urteilen – sonst löst der Einschwingvorgang
+  // einen Klick aus. Getrennte Schwellen für Drücken und Loslassen
+  // verhindern Flattern am Rand.
+  wheelSamples += 1;
+  if (wheelSamples > WHEEL_SETTLE_SAMPLES) {
+    if (deviation > limit) wheelPressed = true;
+    else if (deviation < release) wheelPressed = false;
+  }
+
+  // Nur eindeutig ruhige Messwerte formen Ruhewert und Rauschen. Ohne
+  // diese Hürde fließt ein gehaltener Klick ins Rauschmaß ein, hebt
+  // die Schwelle über sich selbst und schaltet die Erkennung ab.
+  if (!wheelPressed && deviation < release) {
     wheelBaseline += (length - wheelBaseline) * WHEEL_BASELINE_WEIGHT;
+    wheelNoise += (deviation - wheelNoise) * WHEEL_NOISE_WEIGHT;
   }
 
   byId("wheel-press").textContent =
-    `${Math.round(length)} / ${Math.round(wheelBaseline)}`;
-  byId("mouse-wheel").classList.toggle("is-pressed", pressed);
+    `${deviation.toFixed(1)} / ${limit.toFixed(1)}`;
+  byId("mouse-wheel").classList.toggle("is-pressed", wheelPressed);
 }
 
 // Der gemeldete Winkel springt bei jeder vollen Umdrehung von 359 auf
@@ -487,6 +508,9 @@ function resetLiveReadouts() {
   byId("mouse-wheel").classList.remove("is-pressed");
   byId("mouse-wheel-group").style.transform = "";
   wheelBaseline = null;
+  wheelNoise = 0;
+  wheelSamples = 0;
+  wheelPressed = false;
   previousAngle = null;
   turnedAngle = 0;
 
