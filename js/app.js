@@ -26,9 +26,9 @@ const toast = byId("toast");
 // Wichtiger noch: Die Maus meldet ihre Tastenklicks über dieselbe
 // Funkstrecke, über die wir sie abfragen. Wer sie ununterbrochen
 // befragt, verdrängt die Eingabemeldungen – die Tasten wirken dann
-// systemweit tot. Deshalb bleibt der Kanal überwiegend frei.
+// systemweit tot. Deshalb bleibt der Kanal zur Hälfte frei.
 const PRESSURE_INTERVAL = 100;
-const DUTY_LIMIT = 0.35;
+const DUTY_LIMIT = 0.5;
 const MIN_IDLE = 5;
 
 let monitoring = false;
@@ -201,9 +201,27 @@ function startMonitoring() {
 
 function stopMonitoring() {
   monitoring = false;
+  wheelTicks.length = 0;
+  byId("wheel-actual").textContent = "–";
   setLiveState("", mouse.connected
     ? "Live-Überwachung angehalten"
     : "Nicht verbunden");
+}
+
+// Wie viele Radwerte tatsächlich ankommen. Die eingestellte Rate ist
+// nur ein Wunsch – wie viel davon erreichbar ist, hängt an der
+// Antwortzeit der Maus und am Lastdeckel.
+const wheelTicks = [];
+
+function trackWheelRate() {
+  const now = Date.now();
+  wheelTicks.push(now);
+
+  while (wheelTicks.length > 0 && wheelTicks[0] <= now - 1000) {
+    wheelTicks.shift();
+  }
+
+  byId("wheel-actual").textContent = wheelTicks.length;
 }
 
 function wheelInterval() {
@@ -219,18 +237,17 @@ async function monitorLoop() {
     const startedAt = Date.now();
 
     try {
-      // Beide Messgrößen haben ihre eigene Fälligkeit. Würde der
-      // Tastendruck bei jedem Durchlauf mitgelesen, wäre sein
-      // Intervall zugleich die Obergrenze für die Radrate.
-      if (startedAt >= nextPressure) {
-        showPressure(await mouse.readButtonPressure());
-        nextPressure = startedAt + PRESSURE_INTERVAL;
+      // Die Radrate ist ausdrücklich eingestellt und speist die
+      // Diagramme – sie hat Vorrang. Der Tastendruck folgt danach
+      // mit seiner eigenen, festen Frist.
+      if (startedAt >= nextWheel) {
+        showWheel(await mouse.readWheelValues());
+        nextWheel = startedAt + wheelInterval();
       }
 
-      const now = Date.now();
-      if (now >= nextWheel) {
-        showWheel(await mouse.readWheelValues());
-        nextWheel = now + wheelInterval();
+      if (Date.now() >= nextPressure) {
+        showPressure(await mouse.readButtonPressure());
+        nextPressure = Date.now() + PRESSURE_INTERVAL;
       }
     } catch (error) {
       stopMonitoring();
@@ -360,6 +377,7 @@ function percentOfScale(value) {
 
 function showWheel(sample) {
   charts.add(sample);
+  trackWheelRate();
 
   byId("raw-angle").textContent = sample.rawAngle;
   byId("calibrated-angle").textContent = sample.calibratedAngle;

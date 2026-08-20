@@ -234,6 +234,8 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .stream-controls { display: flex; align-items: center; gap: 12px; }
 .stream-controls label { color: var(--muted); font-size: 12px; }
 .stream-controls input { width: 56px; padding: 7px; border: 1px solid var(--line); }
+.rate-actual { color: var(--muted); font: 11px "IBM Plex Mono", monospace; }
+.rate-actual b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* ─── Diagramme ──────────────────────────────────── */
 
