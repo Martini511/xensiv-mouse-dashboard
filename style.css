@@ -219,25 +219,31 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 12px 20px;
+  flex-wrap: wrap;
   padding: 10px 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
-.toggle { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; }
-.toggle input { position: absolute; opacity: 0; }
-.toggle span { width: 34px; height: 18px; border-radius: 9px; background: #b8bdbd; padding: 2px; }
-.toggle span::after { content: ""; display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
-.toggle input:checked + span { background: var(--accent); }
-.toggle input:checked + span::after { transform: translateX(16px); }
+/* Umschalter zwischen zwei gleichwertigen Zuständen – nicht ein/aus.
+   Deshalb bleibt die Bahn in beiden Stellungen eingefärbt und die
+   gewählte Beschriftung wird hervorgehoben. */
+.sensor-switch { display: inline-flex; align-items: center; gap: 9px; }
+.sensor-switch .switch { display: inline-flex; cursor: pointer; }
+.sensor-switch input { position: absolute; opacity: 0; }
+.switch-track { width: 34px; height: 18px; border-radius: 9px; background: var(--accent); padding: 2px; }
+.switch-track::after { content: ""; display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.sensor-switch input:checked + .switch-track::after { transform: translateX(16px); }
+.switch-label { font: 700 12px "Source Sans 3", sans-serif; color: var(--muted); transition: color .2s; }
+.switch-label.is-active { color: var(--ink); }
 
-.live-state { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.live-state { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--muted); }
 .live-state i { width: 9px; height: 9px; border-radius: 50%; background: #c3cacb; }
 .live-state.is-running { color: var(--ink); }
 .live-state.is-running i { background: var(--accent-soft); box-shadow: 0 0 0 4px #12a19026; animation: pulse 1.4s infinite; }
 
-.stream-controls { display: flex; align-items: center; gap: 12px; }
+.stream-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .stream-controls label { color: var(--muted); font-size: 12px; }
 .stream-controls input { width: 56px; padding: 7px; border: 1px solid var(--line); }
 .rate-actual { color: var(--muted); font: 11px "IBM Plex Mono", monospace; }

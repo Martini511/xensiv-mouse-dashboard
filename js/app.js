@@ -283,7 +283,7 @@ function delay(milliseconds) {
 function buildPressBars() {
   const list = byId("press-list");
 
-  SENSOR_KEYS.forEach((key) => {
+  LIVE_SENSORS.forEach((key) => {
     const item = document.createElement("div");
     item.className = "press-item";
 
@@ -310,38 +310,55 @@ function buildPressBars() {
   });
 }
 
-// Je Taste ist genau ein Sensor in Betrieb; das Freigabe-Bit der
-// Konfiguration wählt ihn aus. Meldet das Gerät gar keinen als
-// freigegeben, gilt Force – genauso hält es das Desktop-Werkzeug.
-const SIDES = {
-  left: {
-    label: "Linke Taste",
-    keys: ["leftForce", "leftTmr2d", "leftHall"],
-    fallback: "leftForce",
-  },
-  right: {
-    label: "Rechte Taste",
-    keys: ["rightForce", "rightHall"],
-    fallback: "rightForce",
-  },
+// Je Taste ist genau ein Sensor in Betrieb. Gemessen wird entweder
+// mit der Force- oder mit der Hall-Sensorik, nie gemischt – der
+// Umschalter in der Live-Ansicht wählt die Familie.
+const SENSOR_MODES = {
+  force: { left: "leftForce", right: "rightForce" },
+  hall: { left: "leftHall", right: "rightHall" },
 };
 
+// 2D TMR ist noch in Vorbereitung und liefert keine Messwerte.
+const LIVE_SENSORS = SENSOR_KEYS.filter((key) => key !== "leftTmr2d");
+
+function sensorMode() {
+  return byId("sensor-mode").checked ? "hall" : "force";
+}
+
 function activeSensor(side) {
-  const { keys, fallback } = SIDES[side];
-  return keys.find((key) => byId(`${key}-enabled`).checked) || fallback;
+  return SENSOR_MODES[sensorMode()][side];
+}
+
+// Der Umschalter ist die Vorgabe; die Freigaben in der Konfiguration
+// folgen ihm, denn genau sie werden später ins Gerät geschrieben.
+byId("sensor-mode").addEventListener("change", applySensorMode);
+
+function applySensorMode() {
+  const mode = sensorMode();
+
+  Object.entries(SENSOR_MODES).forEach(([name, sides]) => {
+    Object.values(sides).forEach((key) => {
+      byId(`${key}-enabled`).checked = name === mode;
+    });
+  });
+
+  byId("leftTmr2d-enabled").checked = false;
+
+  byId("label-force").classList.toggle("is-active", mode === "force");
+  byId("label-hall").classList.toggle("is-active", mode === "hall");
 }
 
 function showPressure(values) {
   // Skala zuerst nachziehen, sonst bezögen sich die Balken eines
   // Durchlaufs auf zwei verschiedene Bezugsgrößen.
-  pressScale = Math.max(pressScale, ...SENSOR_KEYS.map((key) => values[key]));
+  pressScale = Math.max(pressScale, ...LIVE_SENSORS.map((key) => values[key]));
 
   const active = {
     left: activeSensor("left"),
     right: activeSensor("right"),
   };
 
-  SENSOR_KEYS.forEach((key) => {
+  LIVE_SENSORS.forEach((key) => {
     const bar = pressBars.get(key);
     const pressure = values[key];
     const threshold = thresholdOf(key);
@@ -519,11 +536,14 @@ byId("save-buttons").addEventListener("click", () => {
   run(() => mouse.writeButtonConfig(config), "Tasteneinstellungen gespeichert");
 });
 
+const SIDE_LABELS = { left: "Linke Taste", right: "Rechte Taste" };
+
 function checkButtonConfig(config) {
   const problems = [];
 
-  Object.values(SIDES).forEach(({ label, keys }) => {
-    if (!keys.some((key) => config[key].enabled)) {
+  Object.entries(SIDE_LABELS).forEach(([side, label]) => {
+    const key = activeSensor(side);
+    if (!config[key].enabled) {
       problems.push(`${label}: kein Sensor aktiv – die Taste löst nicht mehr aus`);
     }
   });
@@ -558,12 +578,20 @@ function readButtonConfig() {
 function populateButtonConfig(config) {
   configFromDevice = true;
 
+  // Welche Familie das Gerät führt, entscheidet die Stellung des
+  // Umschalters – Hall nur, wenn es ausdrücklich so gemeldet wird.
+  byId("sensor-mode").checked =
+    config.leftHall.enabled || config.rightHall.enabled;
+
   SENSOR_KEYS.forEach((key) => {
-    byId(`${key}-enabled`).checked = config[key].enabled;
     byId(`${key}-threshold`).value = config[key].threshold;
     byId(`${key}-threshold-value`).textContent = config[key].threshold;
-    pressBars.get(key).threshold.textContent = config[key].threshold;
+
+    const bar = pressBars.get(key);
+    if (bar) bar.threshold.textContent = config[key].threshold;
   });
+
+  applySensorMode();
 }
 
 // ─── Radkalibrierung ──────────────────────────────────
@@ -673,6 +701,7 @@ function byId(id) {
 
 buildPressBars();
 setDeviceControls(false);
+applySensorMode();
 previewLed(byId("led-color").value);
 resetLiveReadouts();
 stopMonitoring();

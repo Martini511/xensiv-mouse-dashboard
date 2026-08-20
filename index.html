@@ -94,9 +94,18 @@
           <div class="toolbar">
             <span class="live-state" id="live-state"><i></i>Nicht verbunden</span>
             <div class="stream-controls">
+              <span class="sensor-switch">
+                <span class="switch-label is-active" id="label-force">Force</span>
+                <label class="switch">
+                  <input type="checkbox" id="sensor-mode" data-device-control
+                         aria-label="Zwischen Force- und Hall-Sensorik wechseln">
+                  <span class="switch-track"></span>
+                </label>
+                <span class="switch-label" id="label-hall">Hall</span>
+              </span>
               <label>Radrate <input id="sample-rate" type="number" min="1" max="100" value="30" data-device-control> Hz</label>
               <span class="rate-actual">erreicht <b id="wheel-actual">–</b> Hz</span>
-              <button id="clear-charts" class="text-button">Diagramme leeren</button>
+              <button id="clear-charts" class="text-button">Leeren</button>
             </div>
           </div>
 
