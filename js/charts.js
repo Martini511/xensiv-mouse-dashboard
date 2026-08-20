@@ -8,7 +8,9 @@ const COLORS = {
   calibrated: "#0a8a7c",
 };
 
-const MAX_SAMPLES = 240;
+// Bei hoher Radrate schrumpft der sichtbare Zeitraum entsprechend:
+// 400 Messpunkte sind bei 30 Hz gut dreizehn Sekunden.
+const MAX_SAMPLES = 400;
 
 export class WheelCharts {
   constructor(angleCanvas, fieldCanvas) {

@@ -29,6 +29,7 @@ const toast = byId("toast");
 // systemweit tot. Deshalb bleibt der Kanal überwiegend frei.
 const PRESSURE_INTERVAL = 100;
 const DUTY_LIMIT = 0.35;
+const MIN_IDLE = 5;
 
 let monitoring = false;
 let batteryTimer = null;
@@ -211,16 +212,21 @@ function wheelInterval() {
 }
 
 async function monitorLoop() {
+  let nextPressure = 0;
   let nextWheel = 0;
 
   while (monitoring && mouse.connected) {
     const startedAt = Date.now();
 
     try {
-      showPressure(await mouse.readButtonPressure());
+      // Beide Messgrößen haben ihre eigene Fälligkeit. Würde der
+      // Tastendruck bei jedem Durchlauf mitgelesen, wäre sein
+      // Intervall zugleich die Obergrenze für die Radrate.
+      if (startedAt >= nextPressure) {
+        showPressure(await mouse.readButtonPressure());
+        nextPressure = startedAt + PRESSURE_INTERVAL;
+      }
 
-      // Die Radwerte speisen zusätzlich die Diagramme und laufen
-      // deshalb mit eigener, einstellbarer Frequenz.
       const now = Date.now();
       if (now >= nextWheel) {
         showWheel(await mouse.readWheelValues());
@@ -236,7 +242,10 @@ async function monitorLoop() {
     // träge, weil die Verbindung ausgelastet ist, wird von selbst
     // langsamer abgefragt statt weiter nachzudrücken.
     const busy = Date.now() - startedAt;
-    await delay(Math.max(PRESSURE_INTERVAL, busy * (1 / DUTY_LIMIT - 1)));
+    const breather = busy * (1 / DUTY_LIMIT - 1);
+    const untilDue = Math.min(nextPressure, nextWheel) - Date.now();
+
+    await delay(Math.max(breather, untilDue, MIN_IDLE));
   }
 
   stopMonitoring();
@@ -284,20 +293,42 @@ function buildPressBars() {
   });
 }
 
-function showPressure(values) {
-  let leftPressed = false;
-  let rightPressed = false;
+// Je Taste ist genau ein Sensor in Betrieb; das Freigabe-Bit der
+// Konfiguration wählt ihn aus. Meldet das Gerät gar keinen als
+// freigegeben, gilt Force – genauso hält es das Desktop-Werkzeug.
+const SIDES = {
+  left: {
+    label: "Linke Taste",
+    keys: ["leftForce", "leftTmr2d", "leftHall"],
+    fallback: "leftForce",
+  },
+  right: {
+    label: "Rechte Taste",
+    keys: ["rightForce", "rightHall"],
+    fallback: "rightForce",
+  },
+};
 
+function activeSensor(side) {
+  const { keys, fallback } = SIDES[side];
+  return keys.find((key) => byId(`${key}-enabled`).checked) || fallback;
+}
+
+function showPressure(values) {
   // Skala zuerst nachziehen, sonst bezögen sich die Balken eines
   // Durchlaufs auf zwei verschiedene Bezugsgrößen.
   pressScale = Math.max(pressScale, ...SENSOR_KEYS.map((key) => values[key]));
+
+  const active = {
+    left: activeSensor("left"),
+    right: activeSensor("right"),
+  };
 
   SENSOR_KEYS.forEach((key) => {
     const bar = pressBars.get(key);
     const pressure = values[key];
     const threshold = thresholdOf(key);
-    const enabled = byId(`${key}-enabled`).checked;
-    const triggered = enabled && pressure > 0 && pressure >= threshold;
+    const inUse = key === active.left || key === active.right;
 
     observedMax.set(key, Math.max(observedMax.get(key) || 0, pressure));
 
@@ -306,20 +337,21 @@ function showPressure(values) {
     bar.scale.textContent = pressScale;
     bar.fill.style.width = `${percentOfScale(pressure)}%`;
     bar.marker.style.left = `${percentOfScale(threshold)}%`;
-    bar.item.classList.toggle("is-triggered", triggered);
-    bar.item.classList.toggle("is-off", !enabled);
-
-    if (!triggered) return;
-    if (key.startsWith("left")) leftPressed = true;
-    else rightPressed = true;
+    bar.item.classList.toggle("is-triggered", isPressed(values, key));
+    bar.item.classList.toggle("is-off", !inUse);
   });
 
-  byId("mouse-btn-left").classList.toggle("is-pressed", leftPressed);
-  byId("mouse-btn-right").classList.toggle("is-pressed", rightPressed);
+  Object.entries(active).forEach(([side, key]) => {
+    byId(`mouse-btn-${side}`).classList.toggle(
+      "is-pressed", isPressed(values, key));
+  });
 
-  const left = Math.max(values.leftForce, values.leftHall);
-  const right = Math.max(values.rightForce, values.rightHall);
-  byId("stage-press").textContent = `${left} / ${right}`;
+  byId("stage-press").textContent =
+    `${values[active.left]} / ${values[active.right]}`;
+}
+
+function isPressed(values, key) {
+  return values[key] > 0 && values[key] >= thresholdOf(key);
 }
 
 function percentOfScale(value) {
@@ -442,15 +474,10 @@ byId("save-buttons").addEventListener("click", () => {
   run(() => mouse.writeButtonConfig(config), "Tasteneinstellungen gespeichert");
 });
 
-const SIDES = {
-  "Linke Taste": ["leftForce", "leftTmr2d", "leftHall"],
-  "Rechte Taste": ["rightForce", "rightHall"],
-};
-
 function checkButtonConfig(config) {
   const problems = [];
 
-  Object.entries(SIDES).forEach(([label, keys]) => {
+  Object.values(SIDES).forEach(({ label, keys }) => {
     if (!keys.some((key) => config[key].enabled)) {
       problems.push(`${label}: kein Sensor aktiv – die Taste löst nicht mehr aus`);
     }
