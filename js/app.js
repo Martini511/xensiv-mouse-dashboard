@@ -135,6 +135,14 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
       `Die angezeigten Schwellwerte stammen aus der Voreinstellung.`));
   }
 
+  // Ohne die Druckschwelle aus der Kalibrierung lässt sich ein
+  // Radklick nicht erkennen.
+  try {
+    populateCalibration(await mouse.readCalibration());
+  } catch {
+    // Ohne Kalibrierung bleibt das Rad in der Anzeige einfach ruhig
+  }
+
   notify("Maus verbunden");
   if (liveTabActive()) startMonitoring();
 });
@@ -401,9 +409,25 @@ function showWheel(sample) {
   byId("field-cal").textContent = `${sample.calibratedX} / ${sample.calibratedZ}`;
   byId("field-raw").textContent = `${sample.rawX} / ${sample.rawZ}`;
 
+  showWheelPress(sample);
+
   byId("stage-wheel").textContent = `${sample.calibratedAngle}°`;
   byId("mouse-wheel-group").style.transform =
     `rotate(${continuousAngle(sample.calibratedAngle)}deg)`;
+}
+
+// Einen Radklick meldet die Maus nicht als eigenen Messwert. Die
+// Firmware erkennt ihn daran, dass die Länge des kalibrierten
+// Feldvektors die Druckschwelle übersteigt – beim Drücken rückt der
+// Magnet aus der kalibrierten Ellipse heraus.
+function showWheelPress(sample) {
+  const length = Math.hypot(sample.calibratedX, sample.calibratedZ);
+  const trigger = numberValue("press-trigger") * PRESS_TRIGGER_SCALE;
+
+  byId("wheel-press").textContent =
+    `${Math.round(length)} / ${Math.round(trigger)}`;
+  byId("mouse-wheel").classList.toggle(
+    "is-pressed", trigger > 0 && length >= trigger);
 }
 
 // Der gemeldete Winkel springt bei jeder vollen Umdrehung von 359 auf
@@ -433,13 +457,14 @@ function resetLiveReadouts() {
   ["raw-angle", "calibrated-angle"].forEach((id) => {
     byId(id).textContent = "--";
   });
-  ["field-cal", "field-raw"].forEach((id) => {
+  ["field-cal", "field-raw", "wheel-press"].forEach((id) => {
     byId(id).textContent = "-- / --";
   });
 
   byId("stage-wheel").textContent = "–";
   byId("stage-press").textContent = "– / –";
 
+  byId("mouse-wheel").classList.remove("is-pressed");
   byId("mouse-wheel-group").style.transform = "";
   previousAngle = null;
   turnedAngle = 0;
