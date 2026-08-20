@@ -48,6 +48,11 @@ const observedMax = new Map();
 // Ob die angezeigte Tastenkonfiguration tatsächlich vom Gerät stammt.
 let configFromDevice = false;
 
+// Die Schwelle für den Radklick steckt in der Kalibrierung im Gerät.
+// Maßgeblich ist der ausgelesene Wert – nicht der im Eingabefeld,
+// der noch ungespeichert sein kann.
+let wheelPressTrigger = 0;
+
 const pressBars = new Map();
 
 // ─── Reiter ───────────────────────────────────────────
@@ -159,6 +164,7 @@ mouse.addEventListener("disconnected", () => {
   // Die Beobachtungen gelten nur für die abgelaufene Sitzung.
   observedMax.clear();
   configFromDevice = false;
+  wheelPressTrigger = 0;
 
   resetLiveReadouts();
 });
@@ -422,12 +428,13 @@ function showWheel(sample) {
 // Magnet aus der kalibrierten Ellipse heraus.
 function showWheelPress(sample) {
   const length = Math.hypot(sample.calibratedX, sample.calibratedZ);
-  const trigger = numberValue("press-trigger") * PRESS_TRIGGER_SCALE;
 
-  byId("wheel-press").textContent =
-    `${Math.round(length)} / ${Math.round(trigger)}`;
+  byId("wheel-press").textContent = wheelPressTrigger > 0
+    ? `${Math.round(length)} / ${Math.round(wheelPressTrigger)}`
+    : `${Math.round(length)} / --`;
+
   byId("mouse-wheel").classList.toggle(
-    "is-pressed", trigger > 0 && length >= trigger);
+    "is-pressed", wheelPressTrigger > 0 && length >= wheelPressTrigger);
 }
 
 // Der gemeldete Winkel springt bei jeder vollen Umdrehung von 359 auf
@@ -625,9 +632,15 @@ byId("load-calibration").addEventListener("click", () => run(async () => {
   populateCalibration(await mouse.readCalibration());
 }, "Kalibrierung geladen"));
 
-byId("save-calibration").addEventListener("click", () => run(
-  () => mouse.writeCalibration(readCalibration()),
-  "Kalibrierung gespeichert"));
+byId("save-calibration").addEventListener("click", () => {
+  const calibration = readCalibration();
+
+  run(async () => {
+    await mouse.writeCalibration(calibration);
+    // Ab jetzt führt das Gerät diesen Wert.
+    wheelPressTrigger = calibration.pressTrigger;
+  }, "Kalibrierung gespeichert");
+});
 
 byId("start-calibration").addEventListener("click", () => run(
   () => mouse.startCalibration(),
@@ -645,6 +658,10 @@ function readCalibration() {
 }
 
 function populateCalibration(calibration) {
+  // Nur das Gerät speist diese Funktion, deshalb gilt der Wert hier
+  // als der tatsächlich wirksame.
+  wheelPressTrigger = calibration.pressTrigger;
+
   Object.entries({
     "offset-x": calibration.offsetX,
     "offset-z": calibration.offsetZ,
