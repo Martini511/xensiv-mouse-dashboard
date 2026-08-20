@@ -164,9 +164,15 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .mouse-btn.is-pressed { fill: var(--accent-soft); }
 .mouse-wheel { fill: #2b5a61; stroke: #3d7079; stroke-width: 2; }
 .mouse-wheel-mark { stroke: var(--accent-soft); stroke-width: 3; stroke-linecap: round; }
-/* Der Drehpunkt steckt bereits im rotate()-Attribut; eine zusätzliche
-   transform-origin würde ihn ein zweites Mal anwenden. */
-#mouse-wheel-group { transition: transform .08s linear; }
+/* Drehung über die CSS-Eigenschaft mit festem Ursprung. Über das
+   SVG-Attribut rotate(a 120 73) interpoliert der Browser die
+   Transformationsmatrix komponentenweise – dabei wandert der
+   Drehpunkt und die Markierung taumelt. */
+#mouse-wheel-group {
+  transform-box: view-box;
+  transform-origin: 120px 73px;
+  transition: transform .06s linear;
+}
 
 .mouse-led { fill: #123037; stroke: #2f5b62; stroke-width: 2; transition: fill .15s ease; }
 .mouse-glow { fill: transparent; opacity: 0; filter: blur(18px); transition: opacity .15s ease, fill .15s ease; }

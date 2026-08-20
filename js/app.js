@@ -385,8 +385,31 @@ function showWheel(sample) {
   byId("field-raw").textContent = `${sample.rawX} / ${sample.rawZ}`;
 
   byId("stage-wheel").textContent = `${sample.calibratedAngle}°`;
-  byId("mouse-wheel-group").setAttribute(
-    "transform", `rotate(${sample.calibratedAngle} 120 73)`);
+  byId("mouse-wheel-group").style.transform =
+    `rotate(${continuousAngle(sample.calibratedAngle)}deg)`;
+}
+
+// Der gemeldete Winkel springt bei jeder vollen Umdrehung von 359 auf
+// 0 zurück. Direkt übernommen würde die Markierung an dieser Stelle
+// rückwärts durchlaufen. Deshalb wird nur die Winkeländerung addiert,
+// jeweils auf dem kürzeren der beiden Wege.
+let turnedAngle = 0;
+let previousAngle = null;
+
+function continuousAngle(angle) {
+  if (previousAngle === null) {
+    previousAngle = angle;
+    turnedAngle = angle;
+    return turnedAngle;
+  }
+
+  let step = (angle - previousAngle) % 360;
+  if (step > 180) step -= 360;
+  else if (step < -180) step += 360;
+
+  previousAngle = angle;
+  turnedAngle += step;
+  return turnedAngle;
 }
 
 function resetLiveReadouts() {
@@ -399,6 +422,10 @@ function resetLiveReadouts() {
 
   byId("stage-wheel").textContent = "–";
   byId("stage-press").textContent = "– / –";
+
+  byId("mouse-wheel-group").style.transform = "";
+  previousAngle = null;
+  turnedAngle = 0;
 
   // Die Skala gehört zur Messreihe und beginnt mit ihr von vorn.
   pressScale = PRESS_SCALE_MIN;
