@@ -587,7 +587,7 @@ function readCalibration() {
     amplitudeX: numberValue("amplitude-x"),
     amplitudeZ: numberValue("amplitude-z"),
     ellipseAngle: numberValue("ellipse-angle"),
-    pressTrigger: numberValue("press-trigger"),
+    pressTrigger: numberValue("press-trigger") * PRESS_TRIGGER_SCALE,
   };
 }
 
@@ -598,8 +598,19 @@ function populateCalibration(calibration) {
     "amplitude-x": calibration.amplitudeX,
     "amplitude-z": calibration.amplitudeZ,
     "ellipse-angle": calibration.ellipseAngle,
-    "press-trigger": calibration.pressTrigger,
   }).forEach(([id, value]) => { byId(id).value = value; });
+
+  byId("press-trigger").value = roundTrigger(
+    calibration.pressTrigger / PRESS_TRIGGER_SCALE);
+}
+
+// Die Firmware führt die Druckschwelle tausendfach größer als der
+// hier angezeigte Wert. Das Runden hält die Anzeige frei von
+// Nachkommastellen, die nur aus der Gleitkommadarstellung stammen.
+const PRESS_TRIGGER_SCALE = 1000;
+
+function roundTrigger(value) {
+  return Number(value.toFixed(6));
 }
 
 // ─── Hilfsmittel ──────────────────────────────────────
