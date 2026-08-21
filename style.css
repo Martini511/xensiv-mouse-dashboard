@@ -34,15 +34,14 @@
 
 .intro.is-done { opacity: 0; pointer-events: none; }
 
-/* Gezeigt wird die Leinwand, nicht das Video. Sie ist quadratisch und
-   passt sich der kleineren Fensterkante an, damit das Bild vollständig
-   sichtbar bleibt – im Querformat füllt es die Höhe, im Hochformat die
-   Breite. Größe und Lage setzt das Skript auf ganze Bildpunkte; eine
-   Zentrierung über das Raster landet bei ungerader Fensterbreite auf
-   halben Punkten und legte einen weichen Saum um das Bild. */
+/* Gezeigt wird die Leinwand, nicht das Video. Sie deckt das ganze
+   Fenster ab: Fläche und Bild werden gemeinsam auf ihr gezeichnet,
+   damit dazwischen keine Kante zweier Elemente liegt. */
 .intro-canvas {
   display: block;
   position: absolute;
+  top: 0;
+  left: 0;
 }
 
 /* Das Video liefert nur die Bilder. Sichtbar sein darf es nicht, aus

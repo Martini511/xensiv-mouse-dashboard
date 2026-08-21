@@ -8,7 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css">
+  <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
+       aktuelle Datei zu holen statt einer zwischengespeicherten. -->
+  <link rel="stylesheet" href="./style.css?v=4">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -294,7 +296,7 @@
   </main>
 
   <div id="toast" class="toast" role="status"></div>
-  <script type="module" src="./js/intro.js"></script>
+  <script type="module" src="./js/intro.js?v=4"></script>
   <script type="module" src="./js/app.js"></script>
 </body>
 </html>

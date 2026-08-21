@@ -6,6 +6,14 @@
 // und den Rand wegzuschneiden, überträgt eine Leinwand Bild für Bild
 // ausschließlich dieses Quadrat. Der Rand erreicht die Anzeige damit
 // gar nicht erst.
+//
+// Die Leinwand füllt das ganze Fenster. Zuerst wird ein einziger weißer
+// Bildpunkt aus dem Video über die gesamte Fläche gezogen, darauf kommt
+// das Quadrat. Fläche und Bild stammen damit aus derselben Quelle und
+// derselben Farbumrechnung, und zwischen beiden liegt keine Kante
+// zweier Elemente mehr. Ein Strich am Übergang kann so nicht mehr
+// entstehen – weder durch gerundete Maße noch durch ein abweichend
+// umgerechnetes Weiß.
 
 const FADE_MS = 600;
 
@@ -25,59 +33,39 @@ const skip = document.getElementById("intro-skip");
 
 const context = canvas.getContext("2d");
 
-// Winziges Hilfsbild, das je Einzelbild einen einzigen Bildpunkt aus dem
-// Inhalt liest. Daraus wird die Farbe der Fläche ringsum gesetzt, damit
-// zwischen Leinwand und Hintergrund keine Kante entstehen kann – auch
-// dann nicht, wenn ein Rechner das Video geringfügig anders in Farben
-// umrechnet als das Weiß der Formatvorlage.
-const probe = document.createElement("canvas");
-probe.width = 1;
-probe.height = 1;
-const probeContext = probe.getContext("2d", { willReadFrequently: true });
-
 let finished = false;
-let backdrop = "";
 
 function fitCanvas() {
-  // Quadratisch und stets vollständig im Fenster: im Querformat füllt
-  // das Bild die Höhe, im Hochformat die Breite. Kantenlänge und Lage
-  // werden in echten Bildpunkten gerechnet und erst danach in CSS-Maße
-  // zurückgerechnet. So liegt die Leinwand nie auf halben Punkten – sonst
-  // rechnete der Browser das ganze Bild um und legte einen weichen Saum
-  // um die Kanten.
+  // Die Leinwand deckt das Fenster vollständig ab. Gerechnet wird in
+  // echten Bildpunkten, damit der Browser das fertige Bild nicht noch
+  // einmal umrechnen muss.
   const ratio = window.devicePixelRatio || 1;
-  const width = window.innerWidth * ratio;
-  const height = window.innerHeight * ratio;
-  const side = Math.floor(Math.min(width, height));
 
-  canvas.width = side;
-  canvas.height = side;
-  canvas.style.width = `${side / ratio}px`;
-  canvas.style.height = `${side / ratio}px`;
-  canvas.style.left = `${Math.round((width - side) / 2) / ratio}px`;
-  canvas.style.top = `${Math.round((height - side) / 2) / ratio}px`;
-}
-
-function matchBackdrop() {
-  probeContext.drawImage(video, SOURCE.x, SOURCE.y, 1, 1, 0, 0, 1, 1);
-  const [r, g, b] = probeContext.getImageData(0, 0, 1, 1).data;
-  const color = `rgb(${r}, ${g}, ${b})`;
-
-  if (color !== backdrop) {
-    backdrop = color;
-    intro.style.backgroundColor = color;
-  }
+  canvas.width = Math.round(window.innerWidth * ratio);
+  canvas.height = Math.round(window.innerHeight * ratio);
+  canvas.style.width = `${window.innerWidth}px`;
+  canvas.style.height = `${window.innerHeight}px`;
 }
 
 function drawFrame() {
   if (finished) return;
 
+  // Fläche: ein einzelner Bildpunkt aus dem weißen Grund des Videos,
+  // über das ganze Fenster gezogen.
+  context.drawImage(
+    video,
+    SOURCE.x, SOURCE.y, 1, 1,
+    0, 0, canvas.width, canvas.height);
+
+  // Darauf das Inhaltsquadrat, so groß wie die kleinere Fensterkante.
+  const side = Math.min(canvas.width, canvas.height);
   context.drawImage(
     video,
     SOURCE.x, SOURCE.y, SOURCE.size, SOURCE.size,
-    0, 0, canvas.width, canvas.height);
+    Math.round((canvas.width - side) / 2),
+    Math.round((canvas.height - side) / 2),
+    side, side);
 
-  matchBackdrop();
   scheduleFrame();
 }
 
