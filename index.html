@@ -11,6 +11,18 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+  <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
+       Ende des Videos auf. Ohne Ton, weil Browser die Wiedergabe
+       sonst verweigern. -->
+  <div class="intro" id="intro">
+    <video id="intro-video" class="intro-video"
+           src="./assets/Website_Start_Mouse.mp4"
+           autoplay muted playsinline preload="auto"></video>
+    <button type="button" class="intro-skip" id="intro-skip">
+      &Uuml;berspringen
+    </button>
+  </div>
+
   <header class="app-header">
     <a class="brand" href="./" aria-label="Infineon XENSIV Maus Konfigurator">
       <img class="brand-logo" src="./lowres-Logo_Infineon_RGB.eps.png" alt="Infineon Technologies">
@@ -279,6 +291,7 @@
   </main>
 
   <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="./js/intro.js"></script>
   <script type="module" src="./js/app.js"></script>
 </body>
 </html>
