@@ -12,12 +12,15 @@
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
-       Ende des Videos auf. Ohne Ton, weil Browser die Wiedergabe
-       sonst verweigern. -->
+       Ende des Videos auf. Gezeigt wird nicht das Video selbst,
+       sondern nur sein Inhaltsquadrat, das eine Leinwand Bild für
+       Bild überträgt – der schwarze Rand im Video bleibt außen vor.
+       Ohne Ton, weil Browser die Wiedergabe sonst verweigern. -->
   <div class="intro" id="intro">
-    <video id="intro-video" class="intro-video"
+    <canvas id="intro-canvas" class="intro-canvas"></canvas>
+    <video id="intro-video" class="intro-source"
            src="./assets/Website_Start_Mouse.mp4"
-           autoplay muted playsinline preload="auto"></video>
+           muted playsinline preload="auto" aria-hidden="true"></video>
     <button type="button" class="intro-skip" id="intro-skip">
       &Uuml;berspringen
     </button>

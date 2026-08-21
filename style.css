@@ -36,16 +36,21 @@
 
 .intro.is-done { opacity: 0; pointer-events: none; }
 
-/* Der eigentliche Inhalt des Videos ist ein Quadrat von 1080 × 1080,
-   eingebettet in ein Bild von 1920 × 1080 – links und rechts stehen
-   je 420 px schwarzer Rand, fest im Video eingebrannt. Dieser Rand
-   wird weggeschnitten (420/1920 = 21,875 %); die Fläche daneben trägt
-   exakt das Weiß des Videos. So bleibt allein die Maus im Blick. */
-.intro-video {
-  height: min(100vw, 100vh);
-  width: auto;
-  max-width: none;
-  clip-path: inset(0 21.875% 0 21.875%);
+/* Gezeigt wird die Leinwand, nicht das Video. Sie ist quadratisch und
+   passt sich der kleineren Fensterkante an, damit das Bild vollständig
+   sichtbar bleibt – im Querformat füllt es die Höhe, im Hochformat die
+   Breite. */
+.intro-canvas { display: block; }
+
+/* Das Video liefert nur die Bilder. Sichtbar sein darf es nicht, aus
+   dem Layout genommen werden aber auch nicht: Manche Browser hören
+   sonst auf zu dekodieren. */
+.intro-source {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .intro-skip {
