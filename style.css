@@ -27,8 +27,6 @@
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: grid;
-  place-items: center;
   overflow: hidden;
   background: rgb(254, 254, 254);
   transition: opacity .6s ease;
@@ -39,8 +37,13 @@
 /* Gezeigt wird die Leinwand, nicht das Video. Sie ist quadratisch und
    passt sich der kleineren Fensterkante an, damit das Bild vollständig
    sichtbar bleibt – im Querformat füllt es die Höhe, im Hochformat die
-   Breite. */
-.intro-canvas { display: block; }
+   Breite. Größe und Lage setzt das Skript auf ganze Bildpunkte; eine
+   Zentrierung über das Raster landet bei ungerader Fensterbreite auf
+   halben Punkten und legte einen weichen Saum um das Bild. */
+.intro-canvas {
+  display: block;
+  position: absolute;
+}
 
 /* Das Video liefert nur die Bilder. Sichtbar sein darf es nicht, aus
    dem Layout genommen werden aber auch nicht: Manche Browser hören
