@@ -454,16 +454,20 @@ function showWheel(sample) {
 //
 //     √(x_kal² + z_kal²)  >  max_length_calib
 //
-// Der Schwellwert wird dafür in Zählschritten gehalten, also mit dem
-// Faktor 1000 aus der Gleitkommazahl der Leitung – auf derselben
-// Skala wie die Feldwerte und wie die Anzeige im Eingabefeld.
+// Beide Größen müssen dafür auf dieselbe Skala. Die Maximallänge wird
+// wie im Desktop-Werkzeug tausendfach vergrößert geführt, die
+// kalibrierten Feldwerte kommen jedoch eine Zehnerstelle kleiner über
+// die Leitung – daher der zusätzliche Faktor auf dem Radius.
+const WHEEL_RADIUS_SCALE = 10;
+
 let wheelPressTrigger = 0;
 let wheelRadiusMin = Infinity;
 let wheelSamples = 0;
 let wheelHintShown = false;
 
 function showWheelPress(sample) {
-  const radius = Math.hypot(sample.calibratedX, sample.calibratedZ);
+  const radius =
+    Math.hypot(sample.calibratedX, sample.calibratedZ) * WHEEL_RADIUS_SCALE;
 
   byId("wheel-press").textContent = wheelPressTrigger > 0
     ? `${Math.round(radius)} / ${Math.round(wheelPressTrigger)}`
