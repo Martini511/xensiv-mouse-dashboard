@@ -454,9 +454,9 @@ function showWheel(sample) {
 //
 //     √(x_kal² + z_kal²)  >  max_length_calib
 //
-// Verglichen wird unverändert mit dem Wert von der Leitung. Der
-// Faktor 1000 im Desktop-Werkzeug ist dessen Anzeigekonvention, kein
-// Bestandteil der Regel.
+// Der Schwellwert wird dafür in Zählschritten gehalten, also mit dem
+// Faktor 1000 aus der Gleitkommazahl der Leitung – auf derselben
+// Skala wie die Feldwerte und wie die Anzeige im Eingabefeld.
 let wheelPressTrigger = 0;
 let wheelRadiusMin = Infinity;
 let wheelSamples = 0;
@@ -699,7 +699,7 @@ byId("save-calibration").addEventListener("click", () => {
   run(async () => {
     await mouse.writeCalibration(calibration);
     // Ab jetzt führt das Gerät diesen Wert.
-    wheelPressTrigger = calibration.pressTrigger;
+    wheelPressTrigger = calibration.pressTrigger * PRESS_TRIGGER_SCALE;
   }, "Kalibrierung gespeichert");
 });
 
@@ -714,15 +714,16 @@ function readCalibration() {
     amplitudeX: numberValue("amplitude-x"),
     amplitudeZ: numberValue("amplitude-z"),
     ellipseAngle: numberValue("ellipse-angle"),
-    pressTrigger: numberValue("press-trigger") * PRESS_TRIGGER_SCALE,
+    pressTrigger: numberValue("press-trigger") / PRESS_TRIGGER_SCALE,
   };
 }
 
 function populateCalibration(calibration) {
   // Nur das Gerät speist diese Funktion – der Wert gilt damit als der
   // tatsächlich wirksame, nicht der möglicherweise ungespeicherte aus
-  // dem Eingabefeld.
-  wheelPressTrigger = calibration.pressTrigger;
+  // dem Eingabefeld. Gehalten wird er in Zählschritten, also auf der
+  // Skala des Radius.
+  wheelPressTrigger = calibration.pressTrigger * PRESS_TRIGGER_SCALE;
 
   Object.entries({
     "offset-x": calibration.offsetX,
@@ -733,16 +734,25 @@ function populateCalibration(calibration) {
   }).forEach(([id, value]) => { byId(id).value = value; });
 
   byId("press-trigger").value = roundTrigger(
-    calibration.pressTrigger / PRESS_TRIGGER_SCALE);
+    calibration.pressTrigger * PRESS_TRIGGER_SCALE);
 }
 
-// Die Firmware führt die Druckschwelle tausendfach größer als der
-// hier angezeigte Wert. Das Runden hält die Anzeige frei von
-// Nachkommastellen, die nur aus der Gleitkommadarstellung stammen.
+// Die Firmware führt die Druckschwelle tausendfach kleiner als der
+// hier angezeigte Wert. Das Desktop-Werkzeug rechnet genauso:
+//
+//     spin.setValue(int(max_length_calib * 1000))
+//     press_trigger = spin.value() / 1000.0
+//
+// Angezeigt wird sie damit in denselben Zählschritten wie die
+// übertragenen Feldwerte – die Zahl im Eingabefeld lässt sich direkt
+// mit dem Radius in der Live-Ansicht vergleichen.
 const PRESS_TRIGGER_SCALE = 1000;
 
+// Das Desktop-Werkzeug rundet auf eine Ganzzahl. Ohne das schlägt die
+// Ungenauigkeit der 32-Bit-Gleitkommazahl bis in die Anzeige durch
+// – aus 1050 würde 1049,999952.
 function roundTrigger(value) {
-  return Number(value.toFixed(6));
+  return Math.round(value);
 }
 
 // ─── Hilfsmittel ──────────────────────────────────────

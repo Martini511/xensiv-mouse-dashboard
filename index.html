@@ -261,7 +261,7 @@
             <label>Amplitude X<input id="amplitude-x" type="number" min="1" max="32767" value="1" data-device-control></label>
             <label>Amplitude Z<input id="amplitude-z" type="number" min="1" max="32767" value="1" data-device-control></label>
             <label>Ellipsenwinkel<input id="ellipse-angle" type="number" min="-32768" max="32767" value="0" data-device-control></label>
-            <label>Druckschwelle<input id="press-trigger" type="number" step="any" value="0" data-device-control></label>
+            <label>Druckschwelle<input id="press-trigger" type="number" step="1" value="0" data-device-control></label>
           </div>
           <div class="calibration-actions">
             <button id="load-calibration" class="text-button" data-device-control>Werte laden</button>
@@ -269,9 +269,10 @@
             <button id="start-calibration" class="primary-button" data-device-control>360&deg;-Kalibrierung starten</button>
           </div>
           <p class="hint">Der Kalibrierlauf erwartet eine vollst&auml;ndige Umdrehung
-          des Rads. Die Druckschwelle wird tausendfach kleiner angezeigt, als die
-          Firmware sie f&uuml;hrt &ndash; beim Schreiben rechnet die Seite
-          entsprechend zur&uuml;ck.</p>
+          des Rads. Die Druckschwelle wird tausendfach gr&ouml;&szlig;er angezeigt, als die
+          Firmware sie f&uuml;hrt &ndash; genau wie im Desktop-Werkzeug. In dieser
+          Darstellung ist sie unmittelbar mit dem Radius aus der Live-Ansicht
+          vergleichbar.</p>
         </div>
       </details>
     </div>
