@@ -159,6 +159,7 @@ mouse.addEventListener("disconnected", () => {
   // Die Beobachtungen gelten nur für die abgelaufene Sitzung.
   observedMax.clear();
   configFromDevice = false;
+  wheelPressTrigger = 0;
 
   resetLiveReadouts();
 });
@@ -441,59 +442,56 @@ function showWheel(sample) {
     `rotate(${continuousAngle(sample.calibratedAngle)}deg)`;
 }
 
-// Einen Radklick meldet die Maus nicht als eigenen Messwert.
+// Einen Radklick meldet die Maus nicht als eigenen Messwert, und das
+// Desktop-Werkzeug ermittelt ihn nirgends – es schreibt die Schwelle
+// nur ins Gerät. Die Regel der Firmware verrät aber der Name des
+// Felds, `max_length_calib`: die größte Länge des kalibrierten
+// Vektors während des Kalibrierlaufs.
 //
-// Ein Vergleich gegen die gespeicherte Druckschwelle scheidet aus:
-// Die Kalibrierung bildet die Messellipse auf einen Kreis ab, im
-// Ruhezustand ist die Vektorlänge also nahezu konstant – und die
-// Schwelle liegt in einer anderen Einheit als die Rohwerte, sodass
-// der Vergleich dauerhaft anschlägt.
+// Die Kalibrierung bildet die Messellipse auf einen Kreis ab. Beim
+// bloßen Drehen bleibt der Radius deshalb unter dieser Marke; ein
+// Druck rückt den Magneten aus der Ebene und treibt ihn darüber:
 //
-// Erkannt wird der Klick daher an der Abweichung vom eingelaufenen
-// Ruhewert. Die Auslöseschwelle richtet sich nach dem gemessenen
-// Rauschen dieses Ruhewerts: Liegt das Signal ruhig, genügt eine
-// kleine Änderung – so empfindlich wie die Maus selbst.
-const WHEEL_PRESS_SIGMA = 4;        // Vielfaches des Rauschens
-const WHEEL_PRESS_FLOOR = 0.01;     // mindestens ein Prozent des Ruhewerts
-const WHEEL_RELEASE_RATIO = 0.5;    // Loslassen erst deutlich darunter
-const WHEEL_BASELINE_WEIGHT = 0.02;
-const WHEEL_NOISE_WEIGHT = 0.05;
-const WHEEL_SETTLE_SAMPLES = 30;
-
-let wheelBaseline = null;
-let wheelNoise = 0;
+//     √(x_kal² + z_kal²)  >  max_length_calib
+//
+// Verglichen wird unverändert mit dem Wert von der Leitung. Der
+// Faktor 1000 im Desktop-Werkzeug ist dessen Anzeigekonvention, kein
+// Bestandteil der Regel.
+let wheelPressTrigger = 0;
+let wheelRadiusMin = Infinity;
 let wheelSamples = 0;
-let wheelPressed = false;
+let wheelHintShown = false;
 
 function showWheelPress(sample) {
-  const length = Math.hypot(sample.calibratedX, sample.calibratedZ);
-  if (wheelBaseline === null) wheelBaseline = length;
+  const radius = Math.hypot(sample.calibratedX, sample.calibratedZ);
 
-  const deviation = Math.abs(length - wheelBaseline);
-  const limit = Math.max(
-    wheelNoise * WHEEL_PRESS_SIGMA, wheelBaseline * WHEEL_PRESS_FLOOR);
-  const release = limit * WHEEL_RELEASE_RATIO;
+  byId("wheel-press").textContent = wheelPressTrigger > 0
+    ? `${Math.round(radius)} / ${Math.round(wheelPressTrigger)}`
+    : `${Math.round(radius)} / --`;
 
-  // Erst messen, dann urteilen – sonst löst der Einschwingvorgang
-  // einen Klick aus. Getrennte Schwellen für Drücken und Loslassen
-  // verhindern Flattern am Rand.
+  byId("mouse-wheel").classList.toggle(
+    "is-pressed", wheelPressTrigger > 0 && radius > wheelPressTrigger);
+
+  checkWheelTrigger(radius);
+}
+
+// Liegt selbst der kleinste beobachtete Radius über der gespeicherten
+// Maximallänge, stammt diese aus einem alten oder nie gelaufenen
+// Kalibrierlauf. Der Vergleich meldet dann dauerhaft einen Klick –
+// darauf einmalig hinweisen statt es stumm hinzunehmen.
+function checkWheelTrigger(radius) {
   wheelSamples += 1;
-  if (wheelSamples > WHEEL_SETTLE_SAMPLES) {
-    if (deviation > limit) wheelPressed = true;
-    else if (deviation < release) wheelPressed = false;
-  }
+  wheelRadiusMin = Math.min(wheelRadiusMin, radius);
 
-  // Nur eindeutig ruhige Messwerte formen Ruhewert und Rauschen. Ohne
-  // diese Hürde fließt ein gehaltener Klick ins Rauschmaß ein, hebt
-  // die Schwelle über sich selbst und schaltet die Erkennung ab.
-  if (!wheelPressed && deviation < release) {
-    wheelBaseline += (length - wheelBaseline) * WHEEL_BASELINE_WEIGHT;
-    wheelNoise += (deviation - wheelNoise) * WHEEL_NOISE_WEIGHT;
-  }
+  if (wheelHintShown || wheelSamples < 60) return;
+  if (wheelPressTrigger <= 0 || wheelRadiusMin <= wheelPressTrigger) return;
 
-  byId("wheel-press").textContent =
-    `${deviation.toFixed(1)} / ${limit.toFixed(1)}`;
-  byId("mouse-wheel").classList.toggle("is-pressed", wheelPressed);
+  wheelHintShown = true;
+  notify(
+    `Die gespeicherte Maximallänge (${Math.round(wheelPressTrigger)}) liegt ` +
+    `unter dem Ruheradius des Rads (${Math.round(wheelRadiusMin)}). Ein ` +
+    `Radklick lässt sich damit nicht unterscheiden – bitte die ` +
+    `360°-Kalibrierung ausführen.`, true);
 }
 
 // Der gemeldete Winkel springt bei jeder vollen Umdrehung von 359 auf
@@ -532,10 +530,9 @@ function resetLiveReadouts() {
 
   byId("mouse-wheel").classList.remove("is-pressed");
   byId("mouse-wheel-group").style.transform = "";
-  wheelBaseline = null;
-  wheelNoise = 0;
+  wheelRadiusMin = Infinity;
   wheelSamples = 0;
-  wheelPressed = false;
+  wheelHintShown = false;
   previousAngle = null;
   turnedAngle = 0;
 
@@ -696,9 +693,15 @@ byId("load-calibration").addEventListener("click", () => run(async () => {
   populateCalibration(await mouse.readCalibration());
 }, "Kalibrierung geladen"));
 
-byId("save-calibration").addEventListener("click", () => run(
-  () => mouse.writeCalibration(readCalibration()),
-  "Kalibrierung gespeichert"));
+byId("save-calibration").addEventListener("click", () => {
+  const calibration = readCalibration();
+
+  run(async () => {
+    await mouse.writeCalibration(calibration);
+    // Ab jetzt führt das Gerät diesen Wert.
+    wheelPressTrigger = calibration.pressTrigger;
+  }, "Kalibrierung gespeichert");
+});
 
 byId("start-calibration").addEventListener("click", () => run(
   () => mouse.startCalibration(),
@@ -716,6 +719,11 @@ function readCalibration() {
 }
 
 function populateCalibration(calibration) {
+  // Nur das Gerät speist diese Funktion – der Wert gilt damit als der
+  // tatsächlich wirksame, nicht der möglicherweise ungespeicherte aus
+  // dem Eingabefeld.
+  wheelPressTrigger = calibration.pressTrigger;
+
   Object.entries({
     "offset-x": calibration.offsetX,
     "offset-z": calibration.offsetZ,
