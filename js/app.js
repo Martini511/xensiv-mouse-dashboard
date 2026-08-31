@@ -356,8 +356,26 @@ function showActiveSensors() {
 }
 
 SENSOR_KEYS.forEach((key) => {
-  byId(`${key}-enabled`).addEventListener("change", showActiveSensors);
+  byId(`${key}-enabled`).addEventListener("change", () => {
+    keepSingleSensor(key);
+    showActiveSensors();
+  });
 });
+
+// Je Taste misst nur ein Sensor – gemischt geht nicht. Eine Freigabe hebt
+// deshalb die bisherige derselben Seite auf, statt sich danebenzustellen.
+// Die letzte abzuwählen bleibt erlaubt: Das Gerät kennt diesen Zustand,
+// auch wenn die Taste dann nicht mehr auslöst. Davor warnt das Schreiben.
+function keepSingleSensor(key) {
+  if (!byId(`${key}-enabled`).checked) return;
+
+  const side = key.startsWith("left") ? "left" : "right";
+
+  SENSOR_KEYS.forEach((other) => {
+    if (other === key || !other.startsWith(side)) return;
+    byId(`${other}-enabled`).checked = false;
+  });
+}
 
 function showPressure(values) {
   // Skala zuerst nachziehen, sonst bezögen sich die Balken eines
