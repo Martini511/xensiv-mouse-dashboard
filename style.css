@@ -212,6 +212,23 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .mouse-stage { position: relative; z-index: 1; display: grid; place-items: center; }
 .mouse-svg { display: block; width: 100%; max-width: 240px; height: auto; }
 
+/* Beide Darstellungen liegen im selben Rasterfeld übereinander. Sichtbar ist
+   immer nur eine: Sobald das Modell steht, tritt die Zeichnung ab. */
+.mouse-canvas, .mouse-svg { grid-area: 1 / 1; }
+.mouse-canvas {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 4 / 5;
+  /* Ohne diese Zeile beantwortet der Browser das Ziehen mit Scrollen und
+     der Zeigerlauf bricht mitten in der Drehung ab. */
+  touch-action: none;
+  cursor: grab;
+}
+.mouse-canvas:active { cursor: grabbing; }
+.mouse-canvas[hidden] { display: none; }
+.has-model .mouse-svg { display: none; }
+
 .mouse-body { fill: #16383e; stroke: #2f5b62; stroke-width: 3; stroke-linejoin: round; }
 .mouse-btn { fill: #1c454c; stroke: #2f5b62; stroke-width: 2; transition: fill .1s ease; }
 .mouse-btn.is-pressed { fill: var(--accent-soft); }
@@ -428,6 +445,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
   .live-shell { grid-template-columns: 1fr; min-height: 0; }
   .device-stage { padding: 24px; }
   .mouse-svg { max-width: 190px; }
+  .mouse-canvas { max-width: 260px; }
 }
 
 @media (max-width: 640px) {

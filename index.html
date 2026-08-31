@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=4">
+  <link rel="stylesheet" href="./style.css?v=5">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -62,6 +62,11 @@
           <div class="stage-label"><span>GER&Auml;T 01</span><span id="stage-transport">&ndash;</span></div>
 
           <div class="mouse-stage">
+            <!-- Das CAD-Modell übernimmt die Bühne, sobald es geladen ist.
+                 Ohne WebGL oder bei einem Ladefehler bleibt die Zeichnung
+                 darunter stehen – sie zeigt dieselben Zustände. -->
+            <canvas class="mouse-canvas" id="mouse-canvas" hidden
+                    aria-label="Modell der XENSIV Maus"></canvas>
             <svg class="mouse-svg" viewBox="0 0 240 400" role="img"
                  aria-label="Schematische Darstellung der XENSIV Maus">
               <ellipse class="mouse-glow" id="mouse-glow"
@@ -296,6 +301,16 @@
   </main>
 
   <div id="toast" class="toast" role="status"></div>
+  <!-- three.js liegt im Projekt statt auf einem fremden Netz: Das Dashboard
+       wird oft ohne Internetzugang am Gerät benutzt. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./js/vendor/three.module.min.js",
+        "three/addons/": "./js/vendor/addons/"
+      }
+    }
+  </script>
   <script type="module" src="./js/intro.js?v=4"></script>
   <script type="module" src="./js/app.js"></script>
 </body>

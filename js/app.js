@@ -1,6 +1,7 @@
 import { XensivMouseHid } from "./webhid.js";
 import { XensivMouseBluetooth } from "./bluetooth.js";
 import { WheelCharts } from "./charts.js";
+import { MouseModel } from "./model3d.js";
 import { SENSOR_KEYS, SENSOR_LABELS } from "./protocol.js";
 
 // WebHID ist der bevorzugte Weg: Die Maus beantwortet dort jeden
@@ -287,6 +288,29 @@ function delay(milliseconds) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
+// ─── Gerätemodell ─────────────────────────────────────
+
+// Das CAD-Modell ist eine Zugabe. Fällt es aus – kein WebGL, Datei nicht
+// erreichbar –, bleibt die SVG-Zeichnung stehen und zeigt dieselben
+// Zustände. Deshalb steht überall `model?.` und nirgends eine Prüfung.
+let model = null;
+
+async function loadMouseModel() {
+  const canvas = byId("mouse-canvas");
+  try {
+    const loaded = await new MouseModel(canvas)
+      .load("./assets/models/xensiv_mouse.glb");
+    canvas.hidden = false;
+    canvas.closest(".mouse-stage").classList.add("has-model");
+    model = loaded;
+
+    // Was vor dem Laden schon eingestellt war, holt das Modell nach.
+    previewLed(byId("led-color").value);
+  } catch (error) {
+    console.warn("Gerätemodell nicht verfügbar:", error);
+  }
+}
+
 // ─── Anzeige der Messwerte ────────────────────────────
 
 function buildPressBars() {
@@ -410,8 +434,9 @@ function showPressure(values) {
   });
 
   Object.entries(active).forEach(([side, key]) => {
-    byId(`mouse-btn-${side}`).classList.toggle(
-      "is-pressed", isPressed(values, key));
+    const pressed = isPressed(values, key);
+    byId(`mouse-btn-${side}`).classList.toggle("is-pressed", pressed);
+    model?.setButton(side, pressed);
   });
 
   byId("stage-press").textContent =
@@ -438,8 +463,11 @@ function showWheel(sample) {
   showWheelPress(sample);
 
   byId("stage-wheel").textContent = `${sample.calibratedAngle}°`;
-  byId("mouse-wheel-group").style.transform =
-    `rotate(${continuousAngle(sample.calibratedAngle)}deg)`;
+
+  // Nur einmal abrufen: Die Funktion zählt die Umdrehungen mit.
+  const angle = continuousAngle(sample.calibratedAngle);
+  byId("mouse-wheel-group").style.transform = `rotate(${angle}deg)`;
+  model?.setWheelAngle(angle);
 }
 
 // Einen Radklick meldet die Maus nicht als eigenen Messwert, und das
@@ -552,6 +580,7 @@ function resetLiveReadouts() {
 
   byId("mouse-btn-left").classList.remove("is-pressed");
   byId("mouse-btn-right").classList.remove("is-pressed");
+  model?.reset();
 }
 
 function thresholdOf(key) {
@@ -591,6 +620,7 @@ function previewLed(hex) {
   byId("mouse-led").style.fill = off ? "" : hex;
   byId("mouse-glow").style.fill = off ? "transparent" : hex;
   byId("mouse-glow").style.opacity = off ? "0" : ".55";
+  model?.setLed(hex, off);
 }
 
 function toRgb(hex) {
@@ -824,6 +854,7 @@ previewLed(byId("led-color").value);
 resetLiveReadouts();
 stopMonitoring();
 charts.draw();
+loadMouseModel();
 
 byId("stage-transport").textContent = useHid ? "WEBHID · REPORT 0x10" : "BLE / GATT";
 
