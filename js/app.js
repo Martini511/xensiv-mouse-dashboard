@@ -145,6 +145,7 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
   }
 
   notify("Maus verbunden");
+  previewLed(byId("led-color").value);
   if (liveTabActive()) startMonitoring();
 });
 
@@ -162,6 +163,7 @@ mouse.addEventListener("disconnected", () => {
   configFromDevice = false;
   wheelPressTrigger = 0;
 
+  previewLed(byId("led-color").value);
   resetLiveReadouts();
 });
 
@@ -620,7 +622,11 @@ function previewLed(hex) {
   byId("mouse-led").style.fill = off ? "" : hex;
   byId("mouse-glow").style.fill = off ? "transparent" : hex;
   byId("mouse-glow").style.opacity = off ? "0" : ".55";
-  model?.setLed(hex, off);
+
+  // Am Modell leuchtet die LED erst, wenn eine Maus antwortet. Ohne
+  // Verbindung ist die gewählte Farbe nur ein Vorschlag – ein leuchtendes
+  // Gerät würde vortäuschen, dass sie schon angekommen ist.
+  model?.setLed(hex, off || !mouse.connected);
 }
 
 function toRgb(hex) {
