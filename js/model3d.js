@@ -19,10 +19,13 @@ const WHEEL = ["wheel_1055", "wheel_cover"];
 const HOME = { azimuth: 0.55, polar: 1.02 };
 const POLAR_LIMITS = [0.25, 1.45];
 
-// Luft zwischen Modell und Bildrand. Der Abstand der Kamera wird daraus in
-// jedem Bild neu bestimmt, damit die Maus jede Fläche ausfüllt - hohe wie
-// breite - und beim Drehen nirgends anstößt.
+// Luft zwischen Modell und Bildrand.
 const FIT_MARGIN = 1.04;
+
+// So viele Blickrichtungen prüft die Abstandssuche. Feiner lohnt nicht: Die
+// ungünstigste Lage ändert sich über wenige Grad kaum.
+const FRAMING_AZIMUTHS = 48;
+const FRAMING_POLARS = 8;
 
 // So viele Richtungen tastet der Ladevorgang ab, um die äußersten Punkte des
 // Modells zu finden. Der Hüllquader wäre einfacher, seine Ecken ragen aber weit
@@ -67,6 +70,7 @@ export class MouseModel {
     this.wheels = [];
     this.buttonMaterials = {};
     this.hull = [];
+    this.distance = 0.3;
 
     // Rechengrößen für die Bildschleife, einmal angelegt statt je Bild neu.
     this.direction = new THREE.Vector3();
@@ -154,6 +158,7 @@ export class MouseModel {
     this.pivot.add(gltf.scene);
     this.pivot.updateMatrixWorld(true);
     this.hull = extremePoints(gltf.scene);
+    this.#updateFraming();
 
     gltf.scene.traverse((object) => {
       if (!object.isMesh) return;
@@ -249,6 +254,7 @@ export class MouseModel {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.#updateFraming();
     this.#invalidate();
   }
 
@@ -257,16 +263,41 @@ export class MouseModel {
     this.frame = requestAnimationFrame(() => this.#draw());
   }
 
+  // Der Abstand gilt für jede erreichbare Blickrichtung, nicht nur für die
+  // gerade gezeigte: Sonst wüchse und schrumpfte die Maus beim Drehen. Gesucht
+  // ist also die ungünstigste Lage – sie liegt in der Seitenansicht, wo die
+  // Maus ihre ganze Länge quer ins Bild legt.
+  #updateFraming() {
+    if (!this.hull.length) return;
+
+    const vertical = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) * 0.5);
+    const horizontal = vertical * this.camera.aspect;
+    const [lowPolar, highPolar] = POLAR_LIMITS;
+    let worst = 0;
+
+    for (let a = 0; a < FRAMING_AZIMUTHS; a++) {
+      const azimuth = (a / FRAMING_AZIMUTHS) * Math.PI * 2;
+      for (let p = 0; p <= FRAMING_POLARS; p++) {
+        const polar = lowPolar + (highPolar - lowPolar) * (p / FRAMING_POLARS);
+        worst = Math.max(worst,
+          this.#fitDistance(azimuth, polar, horizontal, vertical));
+      }
+    }
+    this.distance = worst * FIT_MARGIN;
+  }
+
   // Wie weit muss die Kamera weg, damit das Modell ins Bild passt? Ein Punkt
   // ist sichtbar, solange sein seitlicher Abstand kleiner bleibt als die
   // Bildbreite in seiner Tiefe – nach dem Abstand aufgelöst ergibt das je
   // Hüllpunkt eine Untergrenze, die größte davon gilt.
-  #fitDistance() {
+  #fitDistance(azimuth, polar, horizontal, vertical) {
+    this.direction.set(
+      Math.sin(polar) * Math.sin(azimuth),
+      Math.cos(polar),
+      Math.sin(polar) * Math.cos(azimuth),
+    );
     this.right.crossVectors(this.worldUp, this.direction).normalize();
     this.upward.crossVectors(this.direction, this.right);
-
-    const vertical = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) * 0.5);
-    const horizontal = vertical * this.camera.aspect;
 
     let distance = 0;
     for (const point of this.hull) {
@@ -275,7 +306,7 @@ export class MouseModel {
         depth + Math.abs(point.dot(this.right)) / horizontal,
         depth + Math.abs(point.dot(this.upward)) / vertical);
     }
-    return distance * FIT_MARGIN;
+    return distance;
   }
 
   #draw() {
@@ -300,7 +331,7 @@ export class MouseModel {
       Math.cos(this.polar),
       Math.sin(this.polar) * Math.cos(this.azimuth),
     );
-    this.camera.position.copy(this.direction).multiplyScalar(this.#fitDistance());
+    this.camera.position.copy(this.direction).multiplyScalar(this.distance);
     this.camera.lookAt(0, 0, 0);
 
     this.renderer.render(this.scene, this.camera);
