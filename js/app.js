@@ -503,8 +503,9 @@ function showWheelPress(sample) {
     ? `${Math.round(radius)} / ${Math.round(wheelPressTrigger)}`
     : `${Math.round(radius)} / --`;
 
-  byId("mouse-wheel").classList.toggle(
-    "is-pressed", wheelPressTrigger > 0 && radius > wheelPressTrigger);
+  const pressed = wheelPressTrigger > 0 && radius > wheelPressTrigger;
+  byId("mouse-wheel").classList.toggle("is-pressed", pressed);
+  model?.setWheelPressed(pressed);
 
   checkWheelTrigger(radius);
 }

@@ -75,6 +75,8 @@ export class MouseModel {
     this.frame = 0;
     this.visible = true;
     this.wheels = [];
+    this.wheelMaterials = [];
+    this.restWheel = [];
     this.buttonMaterials = {};
     this.hull = [];
     this.distance = 0.3;
@@ -172,7 +174,11 @@ export class MouseModel {
       if (!object.isMesh) return;
       const name = object.name.toLowerCase();
 
-      if (WHEEL.some((key) => name.includes(key))) this.wheels.push(object);
+      if (WHEEL.some((key) => name.includes(key))) {
+        this.wheels.push(object);
+        this.wheelMaterials.push(object.material);
+        this.restWheel.push(object.material.color.clone());
+      }
       if (name.includes(COVER)) this.#splitCover(object);
       if (name === LED) {
         this.ledMaterial = object.material;
@@ -242,6 +248,23 @@ export class MouseModel {
     this.#invalidate();
   }
 
+  // Der Radklick färbt Rad und Radabdeckung im selben Ton wie eine gedrückte
+  // Taste. Das Rad ist dunkel, deshalb trägt hier vor allem die Farbe – der
+  // Leuchtanteil setzt nur die Kante ab.
+  setWheelPressed(pressed) {
+    this.wheelMaterials.forEach((material, index) => {
+      if (pressed) {
+        material.color.setHex(PRESS_COLOR);
+        material.emissive.setHex(PRESS_COLOR);
+        material.emissiveIntensity = PRESS_GLOW;
+      } else {
+        material.color.copy(this.restWheel[index]);
+        material.emissiveIntensity = 0;
+      }
+    });
+    this.#invalidate();
+  }
+
   setLed(hex, off) {
     const color = new THREE.Color(hex);
     this.ledLight.color.copy(color);
@@ -263,6 +286,7 @@ export class MouseModel {
 
   reset() {
     this.setWheelAngle(0);
+    this.setWheelPressed(false);
     this.setButton("left", false);
     this.setButton("right", false);
   }
