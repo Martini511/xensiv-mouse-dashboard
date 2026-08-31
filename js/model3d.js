@@ -47,9 +47,11 @@ const PRESS_COLOR = 0x12a190;
 const PRESS_GLOW = 0.35;
 
 // Die LED auf der Platine leuchtet selbst und wirft zusätzlich Licht ins
-// Gehäuse, das durch die Waben nach außen dringt.
-const LED_GLOW = 4.0;
-const LED_LIGHT = 0.035;
+// Gehäuse, das durch die Waben nach außen dringt. Das Innere ist dunkel und
+// wirft wenig zurück - deshalb sind die Werte deutlich höher, als es für eine
+// frei stehende Lampe nötig wäre.
+const LED_GLOW = 14.0;
+const LED_LIGHT = 0.9;
 const LED_DARK = 0x1b1f22;
 
 export class MouseModel {
@@ -118,9 +120,10 @@ export class MouseModel {
     rim.position.set(-0.3, 0.15, -0.35);
     this.scene.add(rim);
 
-    // Sitzt im Gehäuse und färbt den Blick durch die Waben. Ihren Platz
-    // bekommt sie beim Laden, sobald die LED gefunden ist.
-    this.ledLight = new THREE.PointLight(0x12a190, 0, 0.25, 2);
+    // Sitzt im Gehäuse und färbt den Blick durch die Waben. Der schwache
+    // Abfall trägt das Licht bis in die Ecken der Schale; ihren Platz bekommt
+    // sie beim Laden, sobald die LED gefunden ist.
+    this.ledLight = new THREE.PointLight(0x12a190, 0, 0.4, 1.2);
     this.scene.add(this.ledLight);
   }
 
