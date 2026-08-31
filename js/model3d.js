@@ -17,8 +17,17 @@ const WHEEL = ["wheel_1055", "wheel_cover"];
 // Blickrichtung ohne Zutun des Betrachters: leicht von rechts oben auf die
 // Vorderseite. Winkel als Kugelkoordinaten um den Modellmittelpunkt.
 const HOME = { azimuth: 0.55, polar: 1.02 };
-const DISTANCE = 0.26;
 const POLAR_LIMITS = [0.25, 1.45];
+
+// Luft zwischen Modell und Bildrand. Der Abstand der Kamera wird daraus in
+// jedem Bild neu bestimmt, damit die Maus jede Fläche ausfüllt - hohe wie
+// breite - und beim Drehen nirgends anstößt.
+const FIT_MARGIN = 1.04;
+
+// So viele Richtungen tastet der Ladevorgang ab, um die äußersten Punkte des
+// Modells zu finden. Der Hüllquader wäre einfacher, seine Ecken ragen aber weit
+// über die gerundete Maus hinaus - das Bild bliebe unnötig weit weg.
+const HULL_DIRECTIONS = 64;
 
 // Nach dieser Ruhezeit gleitet die Ansicht zurück in die Ausgangslage.
 const RETURN_DELAY = 2200;
@@ -57,6 +66,13 @@ export class MouseModel {
     this.visible = true;
     this.wheels = [];
     this.buttonMaterials = {};
+    this.hull = [];
+
+    // Rechengrößen für die Bildschleife, einmal angelegt statt je Bild neu.
+    this.direction = new THREE.Vector3();
+    this.right = new THREE.Vector3();
+    this.upward = new THREE.Vector3();
+    this.worldUp = new THREE.Vector3(0, 1, 0);
 
     this.#setupStage();
     this.#setupInput();
@@ -136,6 +152,8 @@ export class MouseModel {
   async load(url) {
     const gltf = await new GLTFLoader().loadAsync(url);
     this.pivot.add(gltf.scene);
+    this.pivot.updateMatrixWorld(true);
+    this.hull = extremePoints(gltf.scene);
 
     gltf.scene.traverse((object) => {
       if (!object.isMesh) return;
@@ -239,6 +257,27 @@ export class MouseModel {
     this.frame = requestAnimationFrame(() => this.#draw());
   }
 
+  // Wie weit muss die Kamera weg, damit das Modell ins Bild passt? Ein Punkt
+  // ist sichtbar, solange sein seitlicher Abstand kleiner bleibt als die
+  // Bildbreite in seiner Tiefe – nach dem Abstand aufgelöst ergibt das je
+  // Hüllpunkt eine Untergrenze, die größte davon gilt.
+  #fitDistance() {
+    this.right.crossVectors(this.worldUp, this.direction).normalize();
+    this.upward.crossVectors(this.direction, this.right);
+
+    const vertical = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) * 0.5);
+    const horizontal = vertical * this.camera.aspect;
+
+    let distance = 0;
+    for (const point of this.hull) {
+      const depth = point.dot(this.direction);
+      distance = Math.max(distance,
+        depth + Math.abs(point.dot(this.right)) / horizontal,
+        depth + Math.abs(point.dot(this.upward)) / vertical);
+    }
+    return distance * FIT_MARGIN;
+  }
+
   #draw() {
     this.frame = 0;
     const idle = performance.now() - this.lastInput;
@@ -256,11 +295,12 @@ export class MouseModel {
       }
     }
 
-    this.camera.position.set(
+    this.direction.set(
       Math.sin(this.polar) * Math.sin(this.azimuth),
       Math.cos(this.polar),
       Math.sin(this.polar) * Math.cos(this.azimuth),
-    ).multiplyScalar(DISTANCE);
+    );
+    this.camera.position.copy(this.direction).multiplyScalar(this.#fitDistance());
     this.camera.lookAt(0, 0, 0);
 
     this.renderer.render(this.scene, this.camera);
@@ -270,6 +310,43 @@ export class MouseModel {
 
 function clamp(value, low, high) {
   return Math.min(high, Math.max(low, value));
+}
+
+// Die äußersten Punkte des Modells in gleichmäßig über die Kugel verteilte
+// Richtungen. Das Ergebnis umschließt die Maus deutlich enger als ihr
+// Hüllquader und ist die Grundlage für den Bildausschnitt.
+function extremePoints(root) {
+  const directions = [];
+  for (let i = 0; i < HULL_DIRECTIONS; i++) {
+    const y = 1 - (2 * i + 1) / HULL_DIRECTIONS;
+    const radius = Math.sqrt(Math.max(0, 1 - y * y));
+    const angle = i * 2.399963;                        // goldener Winkel
+    directions.push([Math.cos(angle) * radius, y, Math.sin(angle) * radius]);
+  }
+
+  const best = directions.map(() => ({ value: -Infinity, point: null }));
+  const vertex = new THREE.Vector3();
+
+  root.updateMatrixWorld(true);
+  root.traverse((object) => {
+    if (!object.isMesh) return;
+    const position = object.geometry.getAttribute("position");
+    for (let i = 0; i < position.count; i++) {
+      vertex.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld);
+      for (let d = 0; d < directions.length; d++) {
+        const direction = directions[d];
+        const value = vertex.x * direction[0]
+          + vertex.y * direction[1]
+          + vertex.z * direction[2];
+        if (value > best[d].value) {
+          best[d].value = value;
+          best[d].point = vertex.clone();
+        }
+      }
+    }
+  });
+
+  return best.filter((entry) => entry.point).map((entry) => entry.point);
 }
 
 // Kürzester Weg zurück zur Ausgangsrichtung, damit die Ansicht nach mehreren
