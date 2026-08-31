@@ -219,8 +219,11 @@ export class MouseModel {
 
   // ─── Anzeige ────────────────────────────────────────
 
+  // Das Vorzeichen dreht die Richtung um: Ein wachsender Winkel aus der
+  // Firmware bedeutet eine Drehung, bei der die Radoberseite zum Betrachter
+  // wandert – am Modell entspricht das einer Drehung um die negative Achse.
   setWheelAngle(degrees) {
-    const radians = THREE.MathUtils.degToRad(degrees);
+    const radians = THREE.MathUtils.degToRad(-degrees);
     this.wheels.forEach((wheel) => { wheel.rotation.x = radians; });
     this.#invalidate();
   }
