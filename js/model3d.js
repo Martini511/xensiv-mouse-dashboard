@@ -48,8 +48,10 @@ const PRESS_GLOW = 0.35;
 
 // Über diesen Anteil der Tastenlänge klingt die Farbe nach hinten aus. Sie
 // erlischt genau am Schlitzende – dort hört die Taste auf – reißt dort aber
-// nicht an einer Kante ab, sondern verliert sich schon vorher.
-const PRESS_FADE = 0.4;
+// nicht an einer Kante ab, sondern verliert sich schon vorher. Ein Viertel
+// reicht: Der Umschlagpunkt liegt damit hinter dem Radausschnitt, sodass die
+// gut sichtbare Fläche zwischen Rad und Wabenfeld noch voll trägt.
+const PRESS_FADE = 0.25;
 
 // Die LED auf der Platine bleibt selbst unsichtbar - zu sehen ist nur ihr
 // Licht im Gehäuse, das durch die Waben nach außen dringt. Das Innere ist
