@@ -40,11 +40,16 @@ const RETURN_EASE = 0.055;
 // dahinter – seine linke Taste liegt damit auf der +X-Seite des Modells.
 const LEFT_IS_POSITIVE_X = true;
 
-// Gedrückt wird die Hälfte eingefärbt, nicht nur aufgehellt: Auf dem hellen
+// Gedrückt wird die Taste eingefärbt, nicht nur aufgehellt: Auf dem hellen
 // Deckel ginge ein reiner Leuchtanteil im Glanzlicht unter. Die Farbe ist
 // dieselbe, die auch die Zeichnung benutzt.
 const PRESS_COLOR = 0x12a190;
 const PRESS_GLOW = 0.35;
+
+// Über diesen Anteil der Tastenlänge klingt die Farbe nach hinten aus. Sie
+// erlischt genau am Schlitzende – dort hört die Taste auf – reißt dort aber
+// nicht an einer Kante ab, sondern verliert sich schon vorher.
+const PRESS_FADE = 0.4;
 
 // Die LED auf der Platine bleibt selbst unsichtbar - zu sehen ist nur ihr
 // Licht im Gehäuse, das durch die Waben nach außen dringt. Das Innere ist
@@ -75,7 +80,7 @@ export class MouseModel {
     this.wheels = [];
     this.wheelMaterials = [];
     this.restWheel = [];
-    this.buttonMaterials = {};
+    this.press = null;
     this.hull = [];
     this.distance = 0.3;
 
@@ -177,7 +182,7 @@ export class MouseModel {
         this.wheelMaterials.push(object.material);
         this.restWheel.push(object.material.color.clone());
       }
-      if (name.includes(COVER)) this.#splitCover(object);
+      if (name.includes(COVER)) this.#prepareCover(object);
       if (name === LED) {
         // Der Körper dient nur als Ortsangabe: Er verrät, wo auf der Platine
         // die LED sitzt, und tritt danach ab.
@@ -191,32 +196,53 @@ export class MouseModel {
   }
 
   // Der Deckel ist ein einziges Bauteil; die Tasten sind darin nur durch den
-  // Schlitz in seiner Mitte angedeutet. Für die Tastenrückmeldung wird er in
-  // drei Zeichengruppen zerlegt – linke Taste, rechte Taste, übriges Gehäuse –
-  // die je ein eigenes Material tragen.
-  #splitCover(mesh) {
+  // Schlitz in seiner Mitte angedeutet. Die Rückmeldung malt deshalb der
+  // Shader: Er färbt die Taste vorn kräftig ein und lässt die Farbe zum
+  // Schlitzende hin ausklingen. An der Geometrie ändert sich nichts.
+  #prepareCover(mesh) {
     const geometry = mesh.geometry;
     const index = geometry.getIndex();
     const position = geometry.getAttribute("position");
-    const normal = geometry.getAttribute("normal");
-    if (!index || !normal) return;
+    if (!index) return;
 
-    const limit = slotEnd(index, position);
-    if (limit === -Infinity) return;
+    const end = slotEnd(index, position);
+    if (end === -Infinity) return;
 
-    const cut = cutAcross(index, position, normal, limit);
-    geometry.setAttribute("position", new THREE.BufferAttribute(cut.points, 3));
-    geometry.setAttribute("normal", new THREE.BufferAttribute(cut.normals, 3));
-    geometry.setIndex(cut.left.concat(cut.right, cut.rest));
-    geometry.clearGroups();
-    geometry.addGroup(0, cut.left.length, 0);
-    geometry.addGroup(cut.left.length, cut.right.length, 1);
-    geometry.addGroup(cut.left.length + cut.right.length, cut.rest.length, 2);
+    geometry.computeBoundingBox();
+    const nose = geometry.boundingBox.max.z;
+    this.press = {
+      uPressColor: { value: new THREE.Color(PRESS_COLOR) },
+      uPressGlow: { value: PRESS_GLOW },
+      uPressed: { value: new THREE.Vector2(0, 0) },
+      uPressFade: { value: new THREE.Vector2(end + (nose - end) * PRESS_FADE, end) },
+    };
 
-    const base = mesh.material;
-    this.restColor = base.color.clone();
-    this.buttonMaterials = { left: base.clone(), right: base.clone() };
-    mesh.material = [this.buttonMaterials.left, this.buttonMaterials.right, base];
+    // Ein eigenes Material, damit der Umbau nicht auf andere Bauteile
+    // durchschlägt. Der eigene Schlüssel ist dabei Pflicht: Ohne ihn hielte
+    // three.js die Kopie für das Original und gäbe ihr dessen Programm.
+    const material = mesh.material.clone();
+    material.customProgramCacheKey = () => "cover-press";
+    material.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, this.press);
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", `#include <common>
+          uniform vec2 uPressed;
+          uniform vec2 uPressFade;
+          varying float vPress;`)
+        .replace("#include <begin_vertex>", `#include <begin_vertex>
+          vPress = smoothstep(uPressFade.y, uPressFade.x, position.z)
+            * (position.x >= 0.0 ? uPressed.x : uPressed.y);`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", `#include <common>
+          uniform vec3 uPressColor;
+          uniform float uPressGlow;
+          varying float vPress;`)
+        .replace("#include <color_fragment>", `#include <color_fragment>
+          diffuseColor.rgb = mix(diffuseColor.rgb, uPressColor, vPress);`)
+        .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+          totalEmissiveRadiance += uPressColor * (vPress * uPressGlow);`);
+    };
+    mesh.material = material;
   }
 
   // ─── Anzeige ────────────────────────────────────────
@@ -231,16 +257,9 @@ export class MouseModel {
   }
 
   setButton(side, pressed) {
-    const material = this.buttonMaterials[side];
-    if (!material) return;
-    if (pressed) {
-      material.color.setHex(PRESS_COLOR);
-      material.emissive.setHex(PRESS_COLOR);
-      material.emissiveIntensity = PRESS_GLOW;
-    } else {
-      material.color.copy(this.restColor);
-      material.emissiveIntensity = 0;
-    }
+    if (!this.press) return;
+    const positive = (side === "left") === LEFT_IS_POSITIVE_X;
+    this.press.uPressed.value[positive ? "x" : "y"] = pressed ? 1 : 0;
     this.#invalidate();
   }
 
@@ -375,7 +394,7 @@ function clamp(value, low, high) {
 // Wo läuft der Schlitz zwischen den Tasten aus? Vor seinem Ende ist der Deckel
 // in der Mitte durchtrennt – dort überspannt kein einziges Dreieck die
 // Mittelebene. Das vorderste Dreieck, das sie doch überspannt, markiert also
-// die Schlitzspitze und damit die hintere Kante der Tasten.
+// die Schlitzspitze und damit das hintere Ende der Tasten.
 function slotEnd(index, position) {
   let end = -Infinity;
   for (let triangle = 0; triangle < index.count; triangle += 3) {
@@ -389,86 +408,6 @@ function slotEnd(index, position) {
     end = Math.max(end, position.getZ(a), position.getZ(b), position.getZ(c));
   }
   return end;
-}
-
-// Trennt den Deckel an der Querebene durch die Schlitzspitze. Dreiecke, die
-// über sie hinausragen, werden zerschnitten – nur so bekommt die eingefärbte
-// Taste eine gerade Kante statt eines ausgefransten Rands aus halben
-// Dreiecken. Vor der Ebene entscheidet das Vorzeichen von X über die Seite;
-// dort ist der Deckel ja bereits vom Schlitz geteilt.
-function cutAcross(index, position, normal, limit) {
-  // Ecken als flache Folge aus Ort und Normale, damit neu entstehende Punkte
-  // einfach angehängt werden können.
-  const vertices = [];
-  for (let i = 0; i < position.count; i++) {
-    vertices.push(
-      position.getX(i), position.getY(i), position.getZ(i),
-      normal.getX(i), normal.getY(i), normal.getZ(i),
-    );
-  }
-
-  // Neue Ecke auf der Kante zwischen zwei alten, genau in der Schnittebene.
-  const cut = (from, to) => {
-    const share = (limit - vertices[from * 6 + 2])
-      / (vertices[to * 6 + 2] - vertices[from * 6 + 2]);
-    const made = vertices.length / 6;
-    for (let k = 0; k < 6; k++) {
-      const low = vertices[from * 6 + k];
-      vertices.push(low + (vertices[to * 6 + k] - low) * share);
-    }
-    const length = Math.hypot(
-      vertices[made * 6 + 3], vertices[made * 6 + 4], vertices[made * 6 + 5]) || 1;
-    for (let k = 3; k < 6; k++) vertices[made * 6 + k] /= length;
-    return made;
-  };
-
-  const front = [];
-  const rest = [];
-  for (let triangle = 0; triangle < index.count; triangle += 3) {
-    const corner = [
-      index.getX(triangle), index.getX(triangle + 1), index.getX(triangle + 2),
-    ];
-    const ahead = corner.map((v) => vertices[v * 6 + 2] > limit);
-    const count = ahead.filter(Boolean).length;
-    if (count === 0) { rest.push(...corner); continue; }
-    if (count === 3) { front.push(...corner); continue; }
-
-    // Eine Ecke steht allein auf ihrer Seite: bei count === 1 die vordere,
-    // sonst die verbliebene hintere. Von ihr gehen beide Schnitte aus, und
-    // die Reihenfolge im Dreieck bleibt erhalten – sonst kippte die Fläche um.
-    const alone = ahead.indexOf(count === 1);
-    const a = corner[alone];
-    const b = corner[(alone + 1) % 3];
-    const c = corner[(alone + 2) % 3];
-    const ab = cut(a, b);
-    const ac = cut(a, c);
-    const tip = count === 1 ? front : rest;
-    const wedge = count === 1 ? rest : front;
-    tip.push(a, ab, ac);
-    wedge.push(ab, b, c, ab, c, ac);
-  }
-
-  const left = [];
-  const right = [];
-  for (let triangle = 0; triangle < front.length; triangle += 3) {
-    const side = vertices[front[triangle] * 6]
-      + vertices[front[triangle + 1] * 6]
-      + vertices[front[triangle + 2] * 6];
-    const target = (side >= 0) === LEFT_IS_POSITIVE_X ? left : right;
-    target.push(front[triangle], front[triangle + 1], front[triangle + 2]);
-  }
-
-  const count = vertices.length / 6;
-  const points = new Float32Array(count * 3);
-  const normals = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    for (let k = 0; k < 3; k++) {
-      points[i * 3 + k] = vertices[i * 6 + k];
-      normals[i * 3 + k] = vertices[i * 6 + 3 + k];
-    }
-  }
-
-  return { points, normals, left, right, rest };
 }
 
 // Die äußersten Punkte des Modells in gleichmäßig über die Kugel verteilte
