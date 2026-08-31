@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=5">
+  <link rel="stylesheet" href="./style.css?v=6">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -116,18 +116,7 @@
           <div class="toolbar">
             <span class="live-state" id="live-state"><i></i>Nicht verbunden</span>
             <div class="stream-controls">
-              <span class="sensor-switch"
-                    title="Schreibt die Auswahl in die Maus – erst dann misst der gewählte Sensor">
-                <span class="switch-label is-active" id="label-force">Force</span>
-                <label class="switch">
-                  <input type="checkbox" id="sensor-mode" data-device-control
-                         aria-label="Zwischen Force- und Hall-Sensorik wechseln">
-                  <span class="switch-track"></span>
-                </label>
-                <span class="switch-label" id="label-hall">Hall</span>
-              </span>
-              <label>Radrate <input id="sample-rate" type="number" min="1" max="100" value="30" data-device-control> Hz</label>
-              <span class="rate-actual">erreicht <b id="wheel-actual">–</b> Hz</span>
+              <span class="rate-actual">erreicht <b id="wheel-actual">&ndash;</b> Hz</span>
               <button id="clear-charts" class="text-button">Leeren</button>
             </div>
           </div>
@@ -268,7 +257,8 @@
           <p class="hint">Die Schwellwerte wirken im Gerät selbst: Liegt eine
           Schwelle über dem Druck, den der Sensor tatsächlich erreicht, löst
           die Taste am ganzen Rechner nicht mehr aus – auch nach dem Schließen
-          dieser Seite. Die Live-Überwachung zeigt die erreichbaren Werte.</p>        </div>
+          dieser Seite. Die Freigabe entscheidet zugleich, welchem Sensor die
+          Live-Überwachung je Taste folgt; sie zeigt die erreichbaren Werte.</p>        </div>
       </details>
 
       <details class="accordion">

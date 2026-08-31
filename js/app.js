@@ -220,9 +220,9 @@ function stopMonitoring() {
     : "Nicht verbunden");
 }
 
-// Wie viele Radwerte tatsächlich ankommen. Die eingestellte Rate ist
-// nur ein Wunsch – wie viel davon erreichbar ist, hängt an der
-// Antwortzeit der Maus und am Lastdeckel.
+// Wie viele Radwerte je Sekunde tatsächlich ankommen. Gefragt wird so
+// oft, wie der Lastdeckel zulässt – was davon herauskommt, hängt an der
+// Antwortzeit der Maus und liegt in der Praxis bei etwa fünf Werten.
 const wheelTicks = [];
 
 function trackWheelRate() {
@@ -236,26 +236,18 @@ function trackWheelRate() {
   byId("wheel-actual").textContent = wheelTicks.length;
 }
 
-function wheelInterval() {
-  const frequency = Math.max(1, Math.min(100, Number(byId("sample-rate").value)));
-  return 1000 / frequency;
-}
-
 async function monitorLoop() {
   let nextPressure = 0;
-  let nextWheel = 0;
 
   while (monitoring && mouse.connected) {
     const startedAt = Date.now();
 
     try {
-      // Die Radrate ist ausdrücklich eingestellt und speist die
-      // Diagramme – sie hat Vorrang. Der Tastendruck folgt danach
-      // mit seiner eigenen, festen Frist.
-      if (startedAt >= nextWheel) {
-        showWheel(await mouse.readWheelValues());
-        nextWheel = startedAt + wheelInterval();
-      }
+      // Die Radwerte speisen die Diagramme und werden bei jedem Durchlauf
+      // geholt. Schneller als die Funkstrecke geht ohnehin nicht, und der
+      // Lastdeckel weiter unten hält den Kanal frei. Der Tastendruck folgt
+      // danach mit seiner eigenen, festen Frist.
+      showWheel(await mouse.readWheelValues());
 
       if (Date.now() >= nextPressure) {
         showPressure(await mouse.readButtonPressure());
@@ -271,10 +263,7 @@ async function monitorLoop() {
     // träge, weil die Verbindung ausgelastet ist, wird von selbst
     // langsamer abgefragt statt weiter nachzudrücken.
     const busy = Date.now() - startedAt;
-    const breather = busy * (1 / DUTY_LIMIT - 1);
-    const untilDue = Math.min(nextPressure, nextWheel) - Date.now();
-
-    await delay(Math.max(breather, untilDue, MIN_IDLE));
+    await delay(Math.max(busy * (1 / DUTY_LIMIT - 1), MIN_IDLE));
   }
 
   stopMonitoring();
@@ -345,68 +334,30 @@ function buildPressBars() {
   });
 }
 
-// Je Taste ist genau ein Sensor in Betrieb. Gemessen wird entweder
-// mit der Force- oder mit der Hall-Sensorik, nie gemischt – der
-// Umschalter in der Live-Ansicht wählt die Familie.
-const SENSOR_MODES = {
-  force: { left: "leftForce", right: "rightForce" },
-  hall: { left: "leftHall", right: "rightHall" },
-};
-
 // 2D TMR ist noch in Vorbereitung und liefert keine Messwerte.
 const LIVE_SENSORS = SENSOR_KEYS.filter((key) => key !== "leftTmr2d");
 
-function sensorMode() {
-  return byId("sensor-mode").checked ? "hall" : "force";
-}
-
+// Je Taste misst genau ein Sensor. Welcher das ist, entscheidet allein die
+// Freigabe in der Konfiguration – und die stammt aus dem Gerät. Die
+// Live-Ansicht wählt hier nichts aus, sie liest die Einstellung nur ab.
 function activeSensor(side) {
-  return SENSOR_MODES[sensorMode()][side];
+  return byId(`${side}Hall-enabled`).checked ? `${side}Hall` : `${side}Force`;
 }
 
-// Der Umschalter ist die Vorgabe; die Freigaben in der Konfiguration
-// folgen ihm. Entscheidend: Die Auswahl allein genügt nicht – erst
-// das Schreiben aktiviert den Sensor im Gerät. Vorher liefert die
-// andere Familie keine brauchbaren Messwerte. Das Desktop-Werkzeug
-// weist mit einem eigenen Hinweis genau darauf hin.
-byId("sensor-mode").addEventListener("change", async (event) => {
-  applySensorMode();
-  if (!mouse.connected) return;
+// Der stillgelegte Sensor misst weiter, seine Werte lösen aber keine Taste
+// mehr aus. Sein Balken tritt deshalb zurück, statt zu verschwinden: Beim
+// Einstellen der Schwellen ist der Vergleich beider Familien nützlich.
+function showActiveSensors() {
+  const active = [activeSensor("left"), activeSensor("right")];
 
-  const config = readButtonConfig();
-  const revert = () => {
-    event.target.checked = !event.target.checked;
-    applySensorMode();
-  };
-
-  if (!confirmButtonConfig(config)) {
-    revert();
-    return;
-  }
-
-  try {
-    await mouse.writeButtonConfig(config);
-    notify(`${sensorMode() === "hall" ? "Hall" : "Force"}-Sensorik aktiviert`);
-  } catch (error) {
-    revert();
-    showError(error);
-  }
-});
-
-function applySensorMode() {
-  const mode = sensorMode();
-
-  Object.entries(SENSOR_MODES).forEach(([name, sides]) => {
-    Object.values(sides).forEach((key) => {
-      byId(`${key}-enabled`).checked = name === mode;
-    });
+  pressBars.forEach((bar, key) => {
+    bar.item.classList.toggle("is-off", !active.includes(key));
   });
-
-  byId("leftTmr2d-enabled").checked = false;
-
-  byId("label-force").classList.toggle("is-active", mode === "force");
-  byId("label-hall").classList.toggle("is-active", mode === "hall");
 }
+
+SENSOR_KEYS.forEach((key) => {
+  byId(`${key}-enabled`).addEventListener("change", showActiveSensors);
+});
 
 function showPressure(values) {
   // Skala zuerst nachziehen, sonst bezögen sich die Balken eines
@@ -422,7 +373,6 @@ function showPressure(values) {
     const bar = pressBars.get(key);
     const pressure = values[key];
     const threshold = thresholdOf(key);
-    const inUse = key === active.left || key === active.right;
 
     observedMax.set(key, Math.max(observedMax.get(key) || 0, pressure));
 
@@ -432,7 +382,6 @@ function showPressure(values) {
     bar.fill.style.width = `${percentOfScale(pressure)}%`;
     bar.marker.style.left = `${percentOfScale(threshold)}%`;
     bar.item.classList.toggle("is-triggered", isPressed(values, key));
-    bar.item.classList.toggle("is-off", !inUse);
   });
 
   Object.entries(active).forEach(([side, key]) => {
@@ -712,12 +661,8 @@ function readButtonConfig() {
 function populateButtonConfig(config) {
   configFromDevice = true;
 
-  // Welche Familie das Gerät führt, entscheidet die Stellung des
-  // Umschalters – Hall nur, wenn es ausdrücklich so gemeldet wird.
-  byId("sensor-mode").checked =
-    config.leftHall.enabled || config.rightHall.enabled;
-
   SENSOR_KEYS.forEach((key) => {
+    byId(`${key}-enabled`).checked = config[key].enabled;
     byId(`${key}-threshold`).value = config[key].threshold;
     byId(`${key}-threshold-value`).textContent = config[key].threshold;
 
@@ -725,7 +670,7 @@ function populateButtonConfig(config) {
     if (bar) bar.threshold.textContent = config[key].threshold;
   });
 
-  applySensorMode();
+  showActiveSensors();
 }
 
 // ─── Radkalibrierung ──────────────────────────────────
@@ -856,7 +801,7 @@ function byId(id) {
 
 buildPressBars();
 setDeviceControls(false);
-applySensorMode();
+showActiveSensors();
 previewLed(byId("led-color").value);
 resetLiveReadouts();
 stopMonitoring();
