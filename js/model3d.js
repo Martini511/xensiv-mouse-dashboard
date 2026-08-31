@@ -46,13 +46,11 @@ const LEFT_IS_POSITIVE_X = true;
 const PRESS_COLOR = 0x12a190;
 const PRESS_GLOW = 0.35;
 
-// Die LED auf der Platine leuchtet selbst und wirft zusätzlich Licht ins
-// Gehäuse, das durch die Waben nach außen dringt. Das Innere ist dunkel und
-// wirft wenig zurück - deshalb sind die Werte deutlich höher, als es für eine
-// frei stehende Lampe nötig wäre.
-const LED_GLOW = 14.0;
-const LED_LIGHT = 0.9;
-const LED_DARK = 0x1b1f22;
+// Die LED auf der Platine bleibt selbst unsichtbar - zu sehen ist nur ihr
+// Licht im Gehäuse, das durch die Waben nach außen dringt. Das Innere ist
+// dunkel und wirft wenig zurück, deshalb ist der Wert deutlich höher, als es
+// für eine frei stehende Lampe nötig wäre.
+const LED_LIGHT = 1.6;
 
 export class MouseModel {
   constructor(canvas) {
@@ -181,7 +179,9 @@ export class MouseModel {
       }
       if (name.includes(COVER)) this.#splitCover(object);
       if (name === LED) {
-        this.ledMaterial = object.material;
+        // Der Körper dient nur als Ortsangabe: Er verrät, wo auf der Platine
+        // die LED sitzt, und tritt danach ab.
+        object.visible = false;
         object.getWorldPosition(this.ledLight.position);
       }
     });
@@ -266,21 +266,8 @@ export class MouseModel {
   }
 
   setLed(hex, off) {
-    const color = new THREE.Color(hex);
-    this.ledLight.color.copy(color);
+    this.ledLight.color.set(hex);
     this.ledLight.intensity = off ? 0 : LED_LIGHT;
-
-    if (this.ledMaterial) {
-      // Erloschen zeigt die LED ihren eigenen Farbton, nicht die eingestellte
-      // Farbe – sonst sähe sie aus, als brenne sie schwach weiter.
-      if (off) {
-        this.ledMaterial.color.setHex(LED_DARK);
-      } else {
-        this.ledMaterial.color.copy(color);
-      }
-      this.ledMaterial.emissive.copy(color);
-      this.ledMaterial.emissiveIntensity = off ? 0 : LED_GLOW;
-    }
     this.#invalidate();
   }
 
