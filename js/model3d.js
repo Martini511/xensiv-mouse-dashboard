@@ -190,37 +190,33 @@ export class MouseModel {
     return this;
   }
 
-  // Der Deckel ist ein einziges Bauteil. Für die Tastenrückmeldung werden
-  // seine Dreiecke nach der Seite sortiert, auf der sie liegen, und in zwei
-  // Zeichengruppen mit eigenem Material gelegt. Ein Schnitt durch die
-  // Geometrie ist dafür nicht nötig.
+  // Der Deckel ist ein einziges Bauteil; die Tasten sind darin nur durch den
+  // Schlitz in seiner Mitte angedeutet. Für die Tastenrückmeldung wird er in
+  // drei Zeichengruppen zerlegt – linke Taste, rechte Taste, übriges Gehäuse –
+  // die je ein eigenes Material tragen.
   #splitCover(mesh) {
     const geometry = mesh.geometry;
     const index = geometry.getIndex();
     const position = geometry.getAttribute("position");
-    if (!index) return;
+    const normal = geometry.getAttribute("normal");
+    if (!index || !normal) return;
 
-    const left = [];
-    const right = [];
-    for (let triangle = 0; triangle < index.count; triangle += 3) {
-      const a = index.getX(triangle);
-      const b = index.getX(triangle + 1);
-      const c = index.getX(triangle + 2);
-      const side = position.getX(a) + position.getX(b) + position.getX(c);
-      const target = (side >= 0) === LEFT_IS_POSITIVE_X ? left : right;
-      target.push(a, b, c);
-    }
+    const limit = slotEnd(index, position);
+    if (limit === -Infinity) return;
 
-    index.set(left.concat(right));
-    index.needsUpdate = true;
+    const cut = cutAcross(index, position, normal, limit);
+    geometry.setAttribute("position", new THREE.BufferAttribute(cut.points, 3));
+    geometry.setAttribute("normal", new THREE.BufferAttribute(cut.normals, 3));
+    geometry.setIndex(cut.left.concat(cut.right, cut.rest));
     geometry.clearGroups();
-    geometry.addGroup(0, left.length, 0);
-    geometry.addGroup(left.length, right.length, 1);
+    geometry.addGroup(0, cut.left.length, 0);
+    geometry.addGroup(cut.left.length, cut.right.length, 1);
+    geometry.addGroup(cut.left.length + cut.right.length, cut.rest.length, 2);
 
     const base = mesh.material;
     this.restColor = base.color.clone();
     this.buttonMaterials = { left: base.clone(), right: base.clone() };
-    mesh.material = [this.buttonMaterials.left, this.buttonMaterials.right];
+    mesh.material = [this.buttonMaterials.left, this.buttonMaterials.right, base];
   }
 
   // ─── Anzeige ────────────────────────────────────────
@@ -374,6 +370,105 @@ export class MouseModel {
 
 function clamp(value, low, high) {
   return Math.min(high, Math.max(low, value));
+}
+
+// Wo läuft der Schlitz zwischen den Tasten aus? Vor seinem Ende ist der Deckel
+// in der Mitte durchtrennt – dort überspannt kein einziges Dreieck die
+// Mittelebene. Das vorderste Dreieck, das sie doch überspannt, markiert also
+// die Schlitzspitze und damit die hintere Kante der Tasten.
+function slotEnd(index, position) {
+  let end = -Infinity;
+  for (let triangle = 0; triangle < index.count; triangle += 3) {
+    const a = index.getX(triangle);
+    const b = index.getX(triangle + 1);
+    const c = index.getX(triangle + 2);
+    const xa = position.getX(a);
+    const xb = position.getX(b);
+    const xc = position.getX(c);
+    if (Math.min(xa, xb, xc) > 0 || Math.max(xa, xb, xc) < 0) continue;
+    end = Math.max(end, position.getZ(a), position.getZ(b), position.getZ(c));
+  }
+  return end;
+}
+
+// Trennt den Deckel an der Querebene durch die Schlitzspitze. Dreiecke, die
+// über sie hinausragen, werden zerschnitten – nur so bekommt die eingefärbte
+// Taste eine gerade Kante statt eines ausgefransten Rands aus halben
+// Dreiecken. Vor der Ebene entscheidet das Vorzeichen von X über die Seite;
+// dort ist der Deckel ja bereits vom Schlitz geteilt.
+function cutAcross(index, position, normal, limit) {
+  // Ecken als flache Folge aus Ort und Normale, damit neu entstehende Punkte
+  // einfach angehängt werden können.
+  const vertices = [];
+  for (let i = 0; i < position.count; i++) {
+    vertices.push(
+      position.getX(i), position.getY(i), position.getZ(i),
+      normal.getX(i), normal.getY(i), normal.getZ(i),
+    );
+  }
+
+  // Neue Ecke auf der Kante zwischen zwei alten, genau in der Schnittebene.
+  const cut = (from, to) => {
+    const share = (limit - vertices[from * 6 + 2])
+      / (vertices[to * 6 + 2] - vertices[from * 6 + 2]);
+    const made = vertices.length / 6;
+    for (let k = 0; k < 6; k++) {
+      const low = vertices[from * 6 + k];
+      vertices.push(low + (vertices[to * 6 + k] - low) * share);
+    }
+    const length = Math.hypot(
+      vertices[made * 6 + 3], vertices[made * 6 + 4], vertices[made * 6 + 5]) || 1;
+    for (let k = 3; k < 6; k++) vertices[made * 6 + k] /= length;
+    return made;
+  };
+
+  const front = [];
+  const rest = [];
+  for (let triangle = 0; triangle < index.count; triangle += 3) {
+    const corner = [
+      index.getX(triangle), index.getX(triangle + 1), index.getX(triangle + 2),
+    ];
+    const ahead = corner.map((v) => vertices[v * 6 + 2] > limit);
+    const count = ahead.filter(Boolean).length;
+    if (count === 0) { rest.push(...corner); continue; }
+    if (count === 3) { front.push(...corner); continue; }
+
+    // Eine Ecke steht allein auf ihrer Seite: bei count === 1 die vordere,
+    // sonst die verbliebene hintere. Von ihr gehen beide Schnitte aus, und
+    // die Reihenfolge im Dreieck bleibt erhalten – sonst kippte die Fläche um.
+    const alone = ahead.indexOf(count === 1);
+    const a = corner[alone];
+    const b = corner[(alone + 1) % 3];
+    const c = corner[(alone + 2) % 3];
+    const ab = cut(a, b);
+    const ac = cut(a, c);
+    const tip = count === 1 ? front : rest;
+    const wedge = count === 1 ? rest : front;
+    tip.push(a, ab, ac);
+    wedge.push(ab, b, c, ab, c, ac);
+  }
+
+  const left = [];
+  const right = [];
+  for (let triangle = 0; triangle < front.length; triangle += 3) {
+    const side = vertices[front[triangle] * 6]
+      + vertices[front[triangle + 1] * 6]
+      + vertices[front[triangle + 2] * 6];
+    const target = (side >= 0) === LEFT_IS_POSITIVE_X ? left : right;
+    target.push(front[triangle], front[triangle + 1], front[triangle + 2]);
+  }
+
+  const count = vertices.length / 6;
+  const points = new Float32Array(count * 3);
+  const normals = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    for (let k = 0; k < 3; k++) {
+      points[i * 3 + k] = vertices[i * 6 + k];
+      normals[i * 3 + k] = vertices[i * 6 + 3 + k];
+    }
+  }
+
+  return { points, normals, left, right, rest };
 }
 
 // Die äußersten Punkte des Modells in gleichmäßig über die Kugel verteilte
