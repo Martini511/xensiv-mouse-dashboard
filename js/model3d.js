@@ -11,7 +11,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 // Teilenamen aus der CAD-Baugruppe.
 const COVER = "mouse_cover";
-const BODY = "mouse_body";
+const LED = "led";
 const WHEEL = ["wheel_1055", "wheel_cover"];
 
 // Blickrichtung ohne Zutun des Betrachters: leicht von rechts oben auf die
@@ -45,7 +45,12 @@ const LEFT_IS_POSITIVE_X = true;
 // dieselbe, die auch die Zeichnung benutzt.
 const PRESS_COLOR = 0x12a190;
 const PRESS_GLOW = 0.35;
-const LED_STRENGTH = 0.16;
+
+// Die LED auf der Platine leuchtet selbst und wirft zusätzlich Licht ins
+// Gehäuse, das durch die Waben nach außen dringt.
+const LED_GLOW = 4.0;
+const LED_LIGHT = 0.035;
+const LED_DARK = 0x1b1f22;
 
 export class MouseModel {
   constructor(canvas) {
@@ -113,9 +118,9 @@ export class MouseModel {
     rim.position.set(-0.3, 0.15, -0.35);
     this.scene.add(rim);
 
-    // Sitzt im Gehäuse und färbt den Blick durch die Waben.
+    // Sitzt im Gehäuse und färbt den Blick durch die Waben. Ihren Platz
+    // bekommt sie beim Laden, sobald die LED gefunden ist.
     this.ledLight = new THREE.PointLight(0x12a190, 0, 0.25, 2);
-    this.ledLight.position.set(0, 0, -0.02);
     this.scene.add(this.ledLight);
   }
 
@@ -165,8 +170,11 @@ export class MouseModel {
       const name = object.name.toLowerCase();
 
       if (WHEEL.some((key) => name.includes(key))) this.wheels.push(object);
-      if (name.includes(BODY)) this.bodyMaterial = object.material;
       if (name.includes(COVER)) this.#splitCover(object);
+      if (name === LED) {
+        this.ledMaterial = object.material;
+        object.getWorldPosition(this.ledLight.position);
+      }
     });
 
     this.#invalidate();
@@ -231,10 +239,18 @@ export class MouseModel {
   setLed(hex, off) {
     const color = new THREE.Color(hex);
     this.ledLight.color.copy(color);
-    this.ledLight.intensity = off ? 0 : 0.05;
-    if (this.bodyMaterial) {
-      this.bodyMaterial.emissive.copy(color);
-      this.bodyMaterial.emissiveIntensity = off ? 0 : LED_STRENGTH;
+    this.ledLight.intensity = off ? 0 : LED_LIGHT;
+
+    if (this.ledMaterial) {
+      // Erloschen zeigt die LED ihren eigenen Farbton, nicht die eingestellte
+      // Farbe – sonst sähe sie aus, als brenne sie schwach weiter.
+      if (off) {
+        this.ledMaterial.color.setHex(LED_DARK);
+      } else {
+        this.ledMaterial.color.copy(color);
+      }
+      this.ledMaterial.emissive.copy(color);
+      this.ledMaterial.emissiveIntensity = off ? 0 : LED_GLOW;
     }
     this.#invalidate();
   }
