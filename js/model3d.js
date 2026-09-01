@@ -25,6 +25,17 @@ const POLAR_LIMITS = [0.25, 1.45];
 // und füllt das Bild, statt als Strich darin zu liegen.
 const BOARD_HOME = { azimuth: 0.55, polar: 0.62 };
 
+// Der Radsensor liegt unter dem Achshalter und ist von fast überall verdeckt.
+// Ein Strahlentest über alle Blickrichtungen findet genau zwei, aus denen er
+// ganz frei steht - diese ist die bessere: von hinten über die Platine, das
+// Rad aufrecht in der Mitte und der Sensor davor. Weil die Radansicht sich
+// nicht drehen lässt, bleibt es dabei.
+const WHEEL_HOME = { azimuth: 3.53, polar: 1.08 };
+
+// Nur diesen einen Sensor gibt es, und die Kalibrierung dreht sich um ihn.
+const WHEEL_SENSOR = "wheel.centre";
+const WHEEL_SENSOR_NAME = "TLI493D-M4D7";
+
 // Beim Blick auf die nackte Platine darf der Betrachter auch darunter
 // schauen. Die Pole bleiben knapp ausgespart - genau senkrecht von oben
 // verliert die Kamera ihre Ausrichtung.
@@ -132,11 +143,15 @@ const SPIN_SPEED = 80;                                   // Grad je Sekunde
 // Was die Ansicht zeigt und was sie zulässt. Die Live-Ansicht bleibt bei
 // "live"; die Konfigurationsseite schaltet mit dem geöffneten Reiter um.
 // `turn` ist der erlaubte Höhenwinkel oder null, wenn nicht gedreht wird.
+// `tag` nennt einen Sensor, dessen Schild ohne Zutun des Betrachters steht.
 const VIEWS = {
   live: { shell: true, spin: false, turn: POLAR_LIMITS, home: HOME },
   light: { shell: true, spin: false, turn: null, home: HOME },
   sensors: { shell: false, spin: false, turn: POLAR_FREE, home: BOARD_HOME },
-  wheel: { shell: false, spin: true, turn: null, home: HOME },
+  wheel: {
+    shell: false, spin: true, turn: null, home: WHEEL_HOME,
+    tag: { key: WHEEL_SENSOR, name: WHEEL_SENSOR_NAME },
+  },
 };
 
 export class MouseModel {
@@ -166,6 +181,7 @@ export class MouseModel {
     this.sensors = {};
     this.chosen = {};
     this.focus = null;
+    this.marked = null;
     this.wheels = [];
     this.wheelMaterials = [];
     this.restWheel = [];
@@ -309,9 +325,9 @@ export class MouseModel {
           hidden: this.#addEdges(object),
           position: place.clone(),
           // Der Hall-Sensor sitzt oben auf dem Steg, der Force-Sensor unten.
-          // Der Radsensor liegt zwar oben, aber unter dem Achshalter: Ihm ist
-          // keine Seite zugewandt, seine Strichlinie gilt darum immer.
-          facing: family === "hall" ? 1 : family === "force" ? -1 : 0,
+          // Der Radsensor liegt ebenfalls oben; die Radansicht schaut von
+          // dort auf ihn, sein Umriss bleibt darum durchgezogen.
+          facing: family === "force" ? -1 : 1,
           lit: false,
         };
       }
@@ -321,6 +337,9 @@ export class MouseModel {
     // abgetreten, das Gehäuse kann später folgen.
     this.#measure(gltf.scene);
 
+    // Die Ansicht kann schon vor dem Laden gesetzt worden sein; erst jetzt
+    // gibt es die Sensoren, die sie hervorhebt.
+    this.#showSensors();
     this.#invalidate();
     return this;
   }
@@ -399,7 +418,6 @@ export class MouseModel {
   clearFocus() {
     if (!this.focus) return;
     this.focus = null;
-    this.label.hidden = true;
     this.#showSensors();
   }
 
@@ -422,6 +440,13 @@ export class MouseModel {
       sensor.halo.visible = on;
       sensor.halo.scale.setScalar(aimed ? SENSOR_HALO * FOCUS_HALO : SENSOR_HALO);
     });
+
+    // Das Schild nennt, worum es gerade geht: beim Zeigen den Sensor unter
+    // dem Zeiger, sonst den, um den sich die Ansicht ohnehin dreht.
+    const tag = this.view.tag;
+    this.marked = this.focus?.sensor || (tag && this.sensors[tag.key]) || null;
+    if (this.marked && !this.focus) this.label.textContent = tag.name;
+
     this.#invalidate();
   }
 
@@ -747,8 +772,11 @@ export class MouseModel {
   // Kamera zurückgerechnet, damit es beim Heranfahren mitwandert. Der Versatz
   // des Zeichenfelds gehört dazu - es steht mittig in der Bühne, nicht bündig.
   #placeLabel() {
-    if (!this.focus) return;
-    this.place.copy(this.focus.sensor.position).project(this.camera);
+    if (!this.marked) {
+      this.label.hidden = true;
+      return;
+    }
+    this.place.copy(this.marked.position).project(this.camera);
     const left = this.canvas.offsetLeft
       + (this.place.x * 0.5 + 0.5) * this.canvas.clientWidth;
     const top = this.canvas.offsetTop
