@@ -16,6 +16,7 @@ const LED = "led";
 const SENSOR = "sensor";
 const WHEEL = ["wheel_1055", "wheel_cover"];
 const GUARD = "axis_holder";
+const AXLE = "axis_2205";
 
 // Blickrichtung ohne Zutun des Betrachters: leicht von rechts oben auf die
 // Vorderseite. Winkel als Kugelkoordinaten um den Modellmittelpunkt.
@@ -41,6 +42,12 @@ const WHEEL_SENSOR_NAME = "TLI493D-M4D7";
 // Bauteil selbst lässt - sonst meldete dessen eigene Oberfläche einen Treffer.
 const GUARD_REACH = 0.3;                                 // m
 const GUARD_SKIN = 0.0015;                               // m
+
+// Rad, Radkappe und Achse drehen sich um dieselbe Achse, sind also Dreh-
+// körper. Für die Sichtprobe tritt deshalb je Teil ein Zylinder an seine
+// Stelle; ein Strahl gegen deren knapp dreihundert Dreiecke kostet ein
+// Sechstel dessen, was die vierzehntausend der Teile selbst kosten.
+const PROXY_SIDES = 24;
 
 // Beim Blick auf die nackte Platine darf der Betrachter auch darunter
 // schauen. Die Pole bleiben knapp ausgespart - genau senkrecht von oben
@@ -204,7 +211,7 @@ export class MouseModel {
     this.baseTarget = new THREE.Vector3();
     this.place = new THREE.Vector3();
     this.worldUp = new THREE.Vector3(0, 1, 0);
-    this.guard = null;
+    this.blockers = [];
     this.ray = new THREE.Raycaster();
     this.probe = new THREE.Vector3();
     this.away = new THREE.Vector3();
@@ -300,6 +307,7 @@ export class MouseModel {
     this.pivot.updateMatrixWorld(true);
 
     const place = new THREE.Vector3();
+    const spinning = [];
     gltf.scene.traverse((object) => {
       if (!object.isMesh) return;
       const name = object.name.toLowerCase();
@@ -311,7 +319,13 @@ export class MouseModel {
       }
       if (name.includes(COVER)) this.#prepareCover(object);
       if (name.includes(COVER) || name.includes(BODY)) this.shell.push(object);
-      if (name.includes(GUARD)) this.guard = object;
+
+      // Was dem Radsensor im Weg stehen kann: der Halter mit seiner Form,
+      // die Drehteile je mit ihrem Platzbedarf.
+      if (name.includes(GUARD)) this.blockers.push(object);
+      if (name.includes(AXLE) || WHEEL.some((key) => name.includes(key))) {
+        spinning.push(object);
+      }
       if (name === LED) {
         // Der Körper dient nur als Ortsangabe: Er verrät, wo auf der Platine
         // die LED sitzt, und tritt danach ab.
@@ -350,6 +364,7 @@ export class MouseModel {
     // Der Hüllkörper zählt nur, was auch zu sehen ist – die LED ist eben
     // abgetreten, das Gehäuse kann später folgen.
     this.#measure(gltf.scene);
+    spinning.forEach((part) => this.#addSpinProxy(part));
 
     // Die Ansicht kann schon vor dem Laden gesetzt worden sein; erst jetzt
     // gibt es die Sensoren, die sie hervorhebt.
@@ -478,18 +493,46 @@ export class MouseModel {
     });
   }
 
-  // Steht der Achshalter im Weg? Ein Strahl von aussen auf das Bauteil sagt
-  // es. Mehr als dieses eine Teil braucht die Probe nicht: Die Platine deckt
-  // schon der Seitenvergleich ab, und gegen alle sichtbaren Netze geprüft kam
-  // in 352 von 360 Blickrichtungen dasselbe heraus - die acht Ausnahmen
-  // liegen genau auf der Kante, wo man ohnehin nichts erkennt. Das Netz des
-  // Halters ist klein genug, dass die Probe je Bild nicht ins Gewicht fällt.
+  // Steht dem Sensor etwas im Weg? Ein Strahl von aussen auf das Bauteil
+  // sagt es. Geprüft wird gegen zwei Hindernisse: den Achshalter, dessen
+  // Form zählt, weil gerade seine Lücke den Sensor freigibt, und die
+  // Drehteile als Zylinder. Die Platine deckt schon der Seitenvergleich ab.
+  // Gegen alle sichtbaren Netze gerechnet kam über 1488 Blickrichtungen
+  // dasselbe heraus, bis auf vier - und die liegen kantig zur Platine, wo
+  // der Sensor ohnehin ein Strich ist.
   #blocked(position) {
-    if (!this.guard) return false;
+    if (!this.blockers.length) return false;
     this.probe.copy(this.direction).multiplyScalar(GUARD_REACH).add(position);
     this.ray.set(this.probe, this.away.copy(this.direction).negate());
-    return this.ray.intersectObject(this.guard, false)
+    return this.ray.intersectObjects(this.blockers, false)
       .some((hit) => hit.distance < GUARD_REACH - GUARD_SKIN);
+  }
+
+  // Rad, Radkappe und Achse sind Drehkörper um dieselbe Achse; ihr Umriss
+  // ändert sich beim Drehen nicht. Für die Sichtprobe tritt deshalb je Teil
+  // ein Zylinder an seine Stelle - unsichtbar, und zusammen kosten sie ein
+  // Sechstel dessen, was die echten Netze kosten.
+  //
+  // Je Teil einer, nicht einer um alle drei: Der nähme die Länge von der
+  // zweiundzwanzig Millimeter breiten Achse und den Durchmesser von der
+  // zwanzig Millimeter hohen Kappe und wäre damit eine Trommel, die es nicht
+  // gibt. Sie verdeckte den Sensor in über hundert Blickrichtungen, aus denen
+  // er in Wahrheit zu sehen ist.
+  #addSpinProxy(part) {
+    part.geometry.computeBoundingBox();
+    const box = part.geometry.boundingBox.clone()
+      .applyMatrix4(part.matrixWorld);
+    const size = box.getSize(new THREE.Vector3());
+    const radius = Math.max(size.y, size.z) * 0.5;
+
+    const proxy = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius, size.x, PROXY_SIDES));
+    proxy.rotation.z = Math.PI / 2;
+    proxy.position.copy(box.getCenter(new THREE.Vector3()));
+    proxy.visible = false;
+    this.pivot.add(proxy);
+    proxy.updateMatrixWorld(true);
+    this.blockers.push(proxy);
   }
 
   // Der Lichthof liegt als Schild im Raum und dreht sich mit dem Blick mit.
