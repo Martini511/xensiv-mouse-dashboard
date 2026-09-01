@@ -291,7 +291,11 @@ function delay(milliseconds) {
 // Das CAD-Modell ist eine Zugabe. Fällt es aus – kein WebGL, Datei nicht
 // erreichbar –, bleibt die SVG-Zeichnung stehen und zeigt dieselben
 // Zustände. Deshalb steht überall `model?.` und nirgends eine Prüfung.
-const MODEL_FILE = "./assets/models/xensiv_mouse.glb";
+// Das Modell teilt die Fassungsnummer dieser Datei. Es ist keine Modulkennung
+// und läuft deshalb nicht über die Importmap – ohne Nummer bliebe nach einer
+// Veröffentlichung die alte Datei im Zwischenspeicher liegen.
+const MODEL_FILE = "./assets/models/xensiv_mouse.glb"
+  + new URL(import.meta.url).search;
 let model = null;
 let configModel = null;
 
