@@ -354,6 +354,7 @@ async function loadConfigModel() {
     applyConfigView();
     showActiveSensors();
     previewLed(byId("led-color").value);
+    previewDpi();
   } catch (error) {
     console.warn("Modell der Konfiguration nicht verfügbar:", error);
   }
@@ -363,6 +364,7 @@ async function loadConfigModel() {
 
 const CONFIG_CAPTIONS = {
   light: "Gesamtes Gerät",
+  pointer: "Unterseite · Bewegungslicht",
   sensors: "Gehäuse ausgeblendet · Sensoren",
   wheel: "Gehäuse ausgeblendet · Rad",
 };
@@ -747,11 +749,22 @@ function toRgb(hex) {
 
 byId("dpi").addEventListener("input", ({ target }) => {
   byId("dpi-value").textContent = target.value;
+  previewDpi();
 });
 
 byId("dpi").addEventListener("change", ({ target }) => run(
   () => mouse.setDpi(Number(target.value)),
   `Auflösung auf ${target.value} DPI gesetzt`));
+
+// Das Licht im Fenster der Unterseite folgt dem Regler, nicht dem Gerät: Es
+// zeigt, was eingestellt ist, und tut das auch ohne angeschlossene Maus.
+// Die Grenzen holt es sich vom Regler selbst - zweimal geführt wären sie
+// zweimal zu pflegen.
+function previewDpi() {
+  const slider = byId("dpi");
+  configModel?.setDpi(
+    Number(slider.value), Number(slider.min), Number(slider.max));
+}
 
 // ─── Tastensensorik ───────────────────────────────────
 

@@ -13,6 +13,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 const COVER = "mouse_cover";
 const BODY = "mouse_body";
 const LED = "led";
+const DPI = "dpi";
 const SENSOR = "sensor";
 const WHEEL = ["wheel_1055", "wheel_cover"];
 const GUARD = "axis_holder";
@@ -22,6 +23,12 @@ const AXLE = "axis_2205";
 // Vorderseite. Winkel als Kugelkoordinaten um den Modellmittelpunkt.
 const HOME = { azimuth: 0.55, polar: 1.02 };
 const POLAR_LIMITS = [0.25, 1.45];
+
+// Der optische Sensor sitzt auf der Unterseite. Wer seine Auflösung einstellt,
+// soll ihn sehen - das Gerät liegt dafür auf dem Rücken. Der Höhenwinkel ist
+// die Spiegelung dessen, was die Live-Ansicht von oben zulässt.
+const UNDER_HOME = { azimuth: 0.55, polar: Math.PI - 0.95 };
+const POLAR_UNDER = [Math.PI - POLAR_LIMITS[1], Math.PI - POLAR_LIMITS[0]];
 
 // Die nackte Platine ist flach: Von schräg oben zeigt sie am meisten von sich
 // und füllt das Bild, statt als Strich darin zu liegen.
@@ -149,6 +156,12 @@ const PRESS_FADE = 0.25;
 // für eine frei stehende Lampe nötig wäre.
 const LED_LIGHT = 1.6;
 
+// Das Bewegungslicht im Fenster der Unterseite. Es steht für die Abtastung:
+// je feiner die Auflösung, desto heller. Rot, weil ein optischer Maussensor
+// rot leuchtet - die türkise Farbe gehört der Deckenbeleuchtung.
+const DPI_COLOR = 0xff5340;
+const DPI_LIGHT = [0.02, 0.42];                          // dunkelster, hellster
+
 // Das Rad dreht sich bei der Kalibrierung von selbst weiter - so ist auf
 // einen Blick klar, worum es auf dem Reiter geht.
 const SPIN_SPEED = 80;                                   // Grad je Sekunde
@@ -160,6 +173,7 @@ const SPIN_SPEED = 80;                                   // Grad je Sekunde
 const VIEWS = {
   live: { shell: true, spin: false, turn: POLAR_LIMITS, home: HOME },
   light: { shell: true, spin: false, turn: null, home: HOME },
+  pointer: { shell: true, spin: false, turn: POLAR_UNDER, home: UNDER_HOME },
   sensors: { shell: false, spin: false, turn: POLAR_FREE, home: BOARD_HOME },
   wheel: {
     shell: false, spin: true, turn: POLAR_FREE, home: WHEEL_HOME,
@@ -264,6 +278,13 @@ export class MouseModel {
     // sie beim Laden, sobald die LED gefunden ist.
     this.ledLight = new THREE.PointLight(0x12a190, 0, 0.4, 1.2);
     this.scene.add(this.ledLight);
+
+    // Dasselbe für das Fenster in der Unterseite. Die kurze Reichweite hält
+    // den Schein am Ort: Er soll aus der Öffnung dringen, nicht die halbe
+    // Schale von innen ausleuchten.
+    this.dpiLight = new THREE.PointLight(DPI_COLOR, 0, 0.05, 1.8);
+    this.dpiShare = 0;
+    this.scene.add(this.dpiLight);
   }
 
   #setupInput() {
@@ -331,6 +352,10 @@ export class MouseModel {
         // die LED sitzt, und tritt danach ab.
         object.visible = false;
         centreOf(object, this.ledLight.position);
+      }
+      if (name === DPI) {
+        object.visible = false;
+        centreOf(object, this.dpiLight.position);
       }
       if (name.startsWith(SENSOR)) {
         // Der Name nennt die Familie, die Lage die Seite – letzteres nach
@@ -408,6 +433,7 @@ export class MouseModel {
     });
     this.#showSensors();
     this.#showLed();
+    this.#showDpi();
 
     const home = this.view.home;
     this.azimuth = home.azimuth;
@@ -688,6 +714,15 @@ export class MouseModel {
     this.#showLed();
   }
 
+  // Wie hell das Fenster leuchtet, sagt der Anteil, den der eingestellte Wert
+  // in seinem Bereich einnimmt. Die Grenzen kommen von dort, wo sie ohnehin
+  // stehen - am Schieberegler; hier noch einmal gefuehrt hiesse, sie zweimal
+  // zu pflegen.
+  setDpi(value, low, high) {
+    this.dpiShare = clamp((value - low) / (high - low), 0, 1);
+    this.#showDpi();
+  }
+
   // Ohne Gehäuse hat das Licht keine Waben mehr, durch die es dringen könnte -
   // es würde die nackte Platine bloss türkis überziehen und die hervorgehobenen
   // Teile übertönen. Deshalb bleibt es dort aus.
@@ -695,6 +730,17 @@ export class MouseModel {
     this.ledLight.color.set(this.ledColor || "#12a190");
     this.ledLight.intensity =
       this.ledOff || !this.view.shell ? 0 : LED_LIGHT;
+    this.#invalidate();
+  }
+
+  // Nur wer auf die Unterseite sieht, sieht das Fenster. In jeder anderen
+  // Ansicht bliebe vom Licht ein roter Fleck im Inneren - sichtbar durch die
+  // Waben, ohne dass irgendetwas ihn erklaerte.
+  #showDpi() {
+    const [dark, bright] = DPI_LIGHT;
+    this.dpiLight.intensity = this.view === VIEWS.pointer
+      ? dark + (bright - dark) * this.dpiShare
+      : 0;
     this.#invalidate();
   }
 
