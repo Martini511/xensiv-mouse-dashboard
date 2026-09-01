@@ -61,11 +61,13 @@ const EDGE_COLOR = 0x06181a;
 const EDGE_OPACITY = 0.55;
 
 // Liegt der eingestellte Sensor hinter der Platine, tritt sein gestrichelter
-// Umriss an seine Stelle. Er ist heller gehalten als die Hervorhebung selbst:
-// Eine Linie hat nur ein Pixel Breite, ihr bleibt allein die Helligkeit, um
-// sich vom Grün der Platine abzusetzen.
-const HIDDEN_COLOR = 0x8cffee;
-const HIDDEN_OPACITY = 0.9;
+// Umriss an seine Stelle. Er steht dabei immer im Lichthof, denn beides
+// erscheint nur gemeinsam – und gegen dessen Helligkeit kommt keine helle
+// Linie an. Eine dunkle schon: Sie liest sich im Schein wie auf der Platine,
+// und dunkle Strichlinien sind in der technischen Zeichnung ohnehin die
+// Regel.
+const HIDDEN_COLOR = 0x02201d;
+const HIDDEN_OPACITY = 1;
 
 // Gedrückt wird die Taste eingefärbt, nicht nur aufgehellt: Auf dem hellen
 // Deckel ginge ein reiner Leuchtanteil im Glanzlicht unter. Die Farbe ist
