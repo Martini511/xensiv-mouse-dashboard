@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=7">
+  <link rel="stylesheet" href="./style.css?v=8">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -55,8 +55,8 @@
     </nav>
 
     <!-- ═══ Live-Überwachung ═══════════════════════ -->
-    <div class="panel panel-live" data-panel="live" id="live-panel">
-      <div class="live-shell">
+    <div class="panel panel-stage" data-panel="live" id="live-panel">
+      <div class="stage-shell">
 
         <aside class="device-stage">
           <div class="stage-label"><span>GER&Auml;T 01</span><span id="stage-transport">&ndash;</span></div>
@@ -107,7 +107,7 @@
           </div>
         </aside>
 
-        <section class="live-values">
+        <section class="stage-main">
           <div class="section-heading">
             <div><span class="eyebrow">LIVE-TELEMETRIE</span><h1>Sensorwerte</h1></div>
             <span class="section-index">01</span>
@@ -152,13 +152,36 @@
     </div>
 
     <!-- ═══ Konfiguration ══════════════════════════ -->
-    <div class="panel" data-panel="config" hidden>
-      <div class="section-heading">
-        <div><span class="eyebrow">KONFIGURATION</span><h1>Einstellungen der Maus</h1></div>
-        <span class="section-index">02</span>
-      </div>
+    <div class="panel panel-stage" data-panel="config" hidden>
+      <div class="stage-shell">
 
-      <details class="accordion" open>
+        <!-- Das Modell zeigt zu jedem Reiter, woran gerade gedreht wird. -->
+        <aside class="device-stage">
+          <div class="stage-label">
+            <span>MODELL</span><span id="config-view">BELEUCHTUNG</span>
+          </div>
+
+          <div class="mouse-stage">
+            <canvas class="mouse-canvas" id="config-canvas"
+                    aria-label="Modell der XENSIV Maus"></canvas>
+          </div>
+
+          <div class="stage-readout">
+            <div class="stage-line">
+              <span>ANSICHT</span><strong id="config-caption">Gesamtes Ger&auml;t</strong>
+            </div>
+          </div>
+        </aside>
+
+        <section class="stage-main">
+          <div class="section-heading">
+            <div><span class="eyebrow">KONFIGURATION</span><h1>Einstellungen der Maus</h1></div>
+            <span class="section-index">02</span>
+          </div>
+
+          <!-- `name` macht die Reiter zu einer Auswahl: Der Browser schlie&szlig;t
+               den vorigen von selbst, sobald ein anderer aufgeht. -->
+          <details class="accordion" name="config" data-view="light" open>
         <summary>
           <span class="accordion-index">01</span>
           <span class="accordion-title">Beleuchtung<small>Farbe der Deckenbeleuchtung</small></span>
@@ -190,7 +213,7 @@
         </div>
       </details>
 
-      <details class="accordion">
+      <details class="accordion" name="config" data-view="light">
         <summary>
           <span class="accordion-index">02</span>
           <span class="accordion-title">Zeigeraufl&ouml;sung<small>Abtastrate des optischen Sensors</small></span>
@@ -205,7 +228,7 @@
         </div>
       </details>
 
-      <details class="accordion">
+      <details class="accordion" name="config" data-view="sensors">
         <summary>
           <span class="accordion-index">03</span>
           <span class="accordion-title">Tastensensorik<small>Freigabe und Schwellwerte</small></span>
@@ -263,7 +286,7 @@
           zeigt die erreichbaren Werte.</p>        </div>
       </details>
 
-      <details class="accordion">
+      <details class="accordion" name="config" data-view="wheel">
         <summary>
           <span class="accordion-index">04</span>
           <span class="accordion-title">Radkalibrierung<small>Offsets, Amplituden und Druckschwelle</small></span>
@@ -289,6 +312,8 @@
           vergleichbar.</p>
         </div>
       </details>
+        </section>
+      </div>
     </div>
   </main>
 
@@ -308,16 +333,16 @@
       "imports": {
         "three": "./js/vendor/three.module.min.js",
         "three/addons/": "./js/vendor/addons/",
-        "./js/app.js": "./js/app.js?v=7",
-        "./js/bluetooth.js": "./js/bluetooth.js?v=7",
-        "./js/charts.js": "./js/charts.js?v=7",
-        "./js/model3d.js": "./js/model3d.js?v=7",
-        "./js/protocol.js": "./js/protocol.js?v=7",
-        "./js/webhid.js": "./js/webhid.js?v=7"
+        "./js/app.js": "./js/app.js?v=8",
+        "./js/bluetooth.js": "./js/bluetooth.js?v=8",
+        "./js/charts.js": "./js/charts.js?v=8",
+        "./js/model3d.js": "./js/model3d.js?v=8",
+        "./js/protocol.js": "./js/protocol.js?v=8",
+        "./js/webhid.js": "./js/webhid.js?v=8"
       }
     }
   </script>
-  <script type="module" src="./js/intro.js?v=7"></script>
-  <script type="module" src="./js/app.js?v=7"></script>
+  <script type="module" src="./js/intro.js?v=8"></script>
+  <script type="module" src="./js/app.js?v=8"></script>
 </body>
 </html>

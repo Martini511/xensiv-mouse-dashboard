@@ -284,13 +284,14 @@ function delay(milliseconds) {
 // Das CAD-Modell ist eine Zugabe. Fällt es aus – kein WebGL, Datei nicht
 // erreichbar –, bleibt die SVG-Zeichnung stehen und zeigt dieselben
 // Zustände. Deshalb steht überall `model?.` und nirgends eine Prüfung.
+const MODEL_FILE = "./assets/models/xensiv_mouse.glb";
 let model = null;
+let configModel = null;
 
 async function loadMouseModel() {
   const canvas = byId("mouse-canvas");
   try {
-    const loaded = await new MouseModel(canvas)
-      .load("./assets/models/xensiv_mouse.glb");
+    const loaded = await new MouseModel(canvas).load(MODEL_FILE);
     canvas.hidden = false;
     canvas.closest(".mouse-stage").classList.add("has-model");
     model = loaded;
@@ -300,6 +301,54 @@ async function loadMouseModel() {
   } catch (error) {
     console.warn("Gerätemodell nicht verfügbar:", error);
   }
+}
+
+// Die Konfigurationsseite zeigt dasselbe Gerät noch einmal, aber anders: Sie
+// blendet Teile aus und dreht das Rad, während die Live-Ansicht unberührt
+// bleibt. Beide Flächen gleichzeitig aus einem Modell zu bedienen ginge nur
+// über einen gemeinsamen Zeichenpuffer - zwei eigene sind einfacher.
+async function loadConfigModel() {
+  try {
+    configModel = await new MouseModel(byId("config-canvas")).load(MODEL_FILE);
+    applyConfigView();
+    showActiveSensors();
+    previewLed(byId("led-color").value);
+  } catch (error) {
+    console.warn("Modell der Konfiguration nicht verfügbar:", error);
+  }
+}
+
+// ─── Konfiguration: das Modell folgt dem Reiter ───────
+
+const CONFIG_CAPTIONS = {
+  light: "Gesamtes Gerät",
+  sensors: "Gehäuse ausgeblendet · Sensoren",
+  wheel: "Gehäuse ausgeblendet · Rad",
+};
+
+const configPanels = [
+  ...document.querySelectorAll("[data-panel=config] .accordion"),
+];
+
+// Den Wechsel zwischen den Reitern besorgt der Browser selbst; hier wird nur
+// nachgesehen, welcher offen ist. Zugeklappt sind auch alle ein gültiger
+// Zustand - dann zeigt das Modell wieder das ganze Gerät.
+configPanels.forEach((panel) => {
+  panel.addEventListener("toggle", applyConfigView);
+});
+
+function applyConfigView() {
+  const panel = configPanels.find((entry) => entry.open);
+  const view = panel?.dataset.view || "light";
+
+  configModel?.setView(view);
+  byId("config-view").textContent =
+    panel ? panelTitle(panel).toUpperCase() : "ÜBERSICHT";
+  byId("config-caption").textContent = CONFIG_CAPTIONS[view];
+}
+
+function panelTitle(panel) {
+  return panel.querySelector(".accordion-title").firstChild.textContent.trim();
 }
 
 // ─── Anzeige der Messwerte ────────────────────────────
@@ -352,6 +401,14 @@ function showActiveSensors() {
 
   pressBars.forEach((bar, key) => {
     bar.item.classList.toggle("is-off", !active.includes(key));
+  });
+
+  // Am Modell tritt der Sensor einer Seite hervor, sobald dort einer
+  // freigegeben ist. Die Platine trägt je Taste nur ein Gehäuse – ob darin
+  // Force oder Hall misst, ist ihm von außen nicht anzusehen.
+  configModel?.setSensors({
+    left: byId(`${active[0]}-enabled`).checked,
+    right: byId(`${active[1]}-enabled`).checked,
   });
 }
 
@@ -595,6 +652,10 @@ function previewLed(hex) {
   // Verbindung ist die gewählte Farbe nur ein Vorschlag – ein leuchtendes
   // Gerät würde vortäuschen, dass sie schon angekommen ist.
   model?.setLed(hex, off || !mouse.connected);
+
+  // Auf der Konfigurationsseite gilt das nicht: Dort steht die Farbwahl
+  // daneben, das Modell ist ihre Vorschau.
+  configModel?.setLed(hex, off);
 }
 
 function toRgb(hex) {
@@ -825,6 +886,7 @@ resetLiveReadouts();
 stopMonitoring();
 charts.draw();
 loadMouseModel();
+loadConfigModel();
 
 byId("stage-transport").textContent = useHid ? "WEBHID · REPORT 0x10" : "BLE / GATT";
 

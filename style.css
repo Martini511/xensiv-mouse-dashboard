@@ -159,7 +159,7 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
 .tabs button.active::after { content: ""; position: absolute; height: 3px; left: 0; right: 0; bottom: -1px; background: var(--accent); }
 
 .panel { padding: 40px clamp(22px, 5vw, 72px) 64px; animation: reveal .35s ease-out both; }
-.panel-live { padding: 0; }
+.panel-stage { padding: 0; }
 
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
 .eyebrow, .section-index, .control-title { color: var(--accent-dark); font: 600 10px "IBM Plex Mono", monospace; }
@@ -168,9 +168,11 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .subhead { margin: 36px 0 14px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .hint { margin: 16px 0 0; color: var(--muted); font-size: 13px; }
 
-/* ─── Live-Ansicht ───────────────────────────────── */
+/* ─── Bühne mit Modell ────────────────────── */
+/* Live-Überwachung und Konfiguration teilen sich dieses Raster: links das
+   Gerät, rechts die Werte. */
 
-.live-shell {
+.stage-shell {
   display: grid;
   grid-template-columns: minmax(320px, 38%) minmax(520px, 62%);
   min-height: calc(100vh - 140px);
@@ -273,7 +275,7 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .stage-line strong { display: inline-flex; align-items: center; gap: 8px; font: 600 15px "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
 .stage-swatch { width: 13px; height: 13px; border-radius: 2px; background: var(--led-glow); box-shadow: 0 0 10px var(--led-glow); }
 
-.live-values { min-width: 0; padding: 40px clamp(22px, 4vw, 60px) 64px; }
+.stage-main { min-width: 0; padding: 40px clamp(22px, 4vw, 60px) 64px; }
 
 /* ─── Messwertkarten ─────────────────────────────── */
 
@@ -442,7 +444,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 }
 
 @media (max-width: 960px) {
-  .live-shell { grid-template-columns: 1fr; min-height: 0; }
+  .stage-shell { grid-template-columns: 1fr; min-height: 0; }
   .device-stage { padding: 24px; }
   .mouse-svg { max-width: 190px; }
   /* Einspaltig steht die Bühne über den Messwerten. Ohne Deckel schöbe sie
@@ -456,7 +458,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
   .tabs { overflow-x: auto; height: 58px; gap: 22px; padding: 0 18px; }
   .tabs button { flex: 0 0 auto; }
   .panel { padding: 30px 18px 48px; }
-  .live-values { padding: 30px 18px 48px; }
+  .stage-main { padding: 30px 18px 48px; }
   .metric-grid, .control-grid.two-columns, .chart-grid, .calibration-fields { grid-template-columns: 1fr; }
   .control-block + .control-block { border-left: 0; border-top: 1px solid var(--line); }
   .sensor-row { grid-template-columns: 1fr 44px; padding: 14px 20px; gap: 12px; }

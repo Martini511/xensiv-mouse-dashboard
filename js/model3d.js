@@ -11,13 +11,24 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 // Teilenamen aus der CAD-Baugruppe.
 const COVER = "mouse_cover";
+const BODY = "mouse_body";
 const LED = "led";
+const SENSOR = "sensor";
 const WHEEL = ["wheel_1055", "wheel_cover"];
 
 // Blickrichtung ohne Zutun des Betrachters: leicht von rechts oben auf die
 // Vorderseite. Winkel als Kugelkoordinaten um den Modellmittelpunkt.
 const HOME = { azimuth: 0.55, polar: 1.02 };
 const POLAR_LIMITS = [0.25, 1.45];
+
+// Die nackte Platine ist flach: Von schräg oben zeigt sie am meisten von sich
+// und füllt das Bild, statt als Strich darin zu liegen.
+const BOARD_HOME = { azimuth: 0.55, polar: 0.62 };
+
+// Beim Blick auf die nackte Platine darf der Betrachter auch darunter
+// schauen. Die Pole bleiben knapp ausgespart - genau senkrecht von oben
+// verliert die Kamera ihre Ausrichtung.
+const POLAR_FREE = [0.05, Math.PI - 0.05];
 
 // Luft zwischen Modell und Bildrand.
 const FIT_MARGIN = 1.04;
@@ -46,6 +57,13 @@ const LEFT_IS_POSITIVE_X = true;
 const PRESS_COLOR = 0x12a190;
 const PRESS_GLOW = 0.35;
 
+// Ein Sensorgehäuse misst drei Millimeter auf einer Platine von hundert. Bei
+// der Leuchtstärke einer Taste wäre es ein Fleck, den man suchen muss – und
+// selbst hell bliebe es klein. Deshalb bekommt es zusätzlich einen Lichthof,
+// so wie das Video die Bauteile mit einer Fahne herausstellt.
+const SENSOR_GLOW = 1.6;
+const SENSOR_HALO = 0.016;                               // m
+
 // Über diesen Anteil der Tastenlänge klingt die Farbe nach hinten aus. Sie
 // erlischt genau am Schlitzende – dort hört die Taste auf – reißt dort aber
 // nicht an einer Kante ab, sondern verliert sich schon vorher. Ein Viertel
@@ -58,6 +76,20 @@ const PRESS_FADE = 0.25;
 // dunkel und wirft wenig zurück, deshalb ist der Wert deutlich höher, als es
 // für eine frei stehende Lampe nötig wäre.
 const LED_LIGHT = 1.6;
+
+// Das Rad dreht sich bei der Kalibrierung von selbst weiter - so ist auf
+// einen Blick klar, worum es auf dem Reiter geht.
+const SPIN_SPEED = 80;                                   // Grad je Sekunde
+
+// Was die Ansicht zeigt und was sie zulässt. Die Live-Ansicht bleibt bei
+// "live"; die Konfigurationsseite schaltet mit dem geöffneten Reiter um.
+// `turn` ist der erlaubte Höhenwinkel oder null, wenn nicht gedreht wird.
+const VIEWS = {
+  live: { shell: true, spin: false, turn: POLAR_LIMITS, home: HOME },
+  light: { shell: true, spin: false, turn: null, home: HOME },
+  sensors: { shell: false, spin: false, turn: POLAR_FREE, home: BOARD_HOME },
+  wheel: { shell: false, spin: true, turn: null, home: HOME },
+};
 
 export class MouseModel {
   constructor(canvas) {
@@ -77,8 +109,13 @@ export class MouseModel {
     this.azimuth = HOME.azimuth;
     this.polar = HOME.polar;
     this.lastInput = 0;
+    this.lastFrame = 0;
     this.frame = 0;
     this.visible = true;
+    this.view = VIEWS.live;
+    this.shell = [];
+    this.sensors = {};
+    this.chosen = {};
     this.wheels = [];
     this.wheelMaterials = [];
     this.restWheel = [];
@@ -90,6 +127,7 @@ export class MouseModel {
     this.direction = new THREE.Vector3();
     this.right = new THREE.Vector3();
     this.upward = new THREE.Vector3();
+    this.target = new THREE.Vector3();
     this.worldUp = new THREE.Vector3(0, 1, 0);
 
     this.#setupStage();
@@ -147,9 +185,10 @@ export class MouseModel {
 
     this.canvas.addEventListener("pointermove", (event) => {
       if (!pointers.has(event.pointerId) || !last) return;
+      if (!this.view.turn) return;
       this.azimuth -= (event.clientX - last.clientX) * 0.008;
       this.polar = clamp(
-        this.polar - (event.clientY - last.clientY) * 0.008, ...POLAR_LIMITS);
+        this.polar - (event.clientY - last.clientY) * 0.008, ...this.view.turn);
       last = event;
       this.#invalidate();
     });
@@ -172,9 +211,8 @@ export class MouseModel {
     const gltf = await new GLTFLoader().loadAsync(url);
     this.pivot.add(gltf.scene);
     this.pivot.updateMatrixWorld(true);
-    this.hull = extremePoints(gltf.scene);
-    this.#updateFraming();
 
+    const place = new THREE.Vector3();
     gltf.scene.traverse((object) => {
       if (!object.isMesh) return;
       const name = object.name.toLowerCase();
@@ -185,16 +223,104 @@ export class MouseModel {
         this.restWheel.push(object.material.color.clone());
       }
       if (name.includes(COVER)) this.#prepareCover(object);
+      if (name.includes(COVER) || name.includes(BODY)) this.shell.push(object);
       if (name === LED) {
         // Der Körper dient nur als Ortsangabe: Er verrät, wo auf der Platine
         // die LED sitzt, und tritt danach ab.
         object.visible = false;
-        object.getWorldPosition(this.ledLight.position);
+        centreOf(object, this.ledLight.position);
+      }
+      if (name.startsWith(SENSOR)) {
+        // Welcher der beiden links ist, sagt allein ihre Lage – dieselbe
+        // Regel wie bei den Tasten, damit beides zusammenpasst.
+        centreOf(object, place);
+        const side = (place.x >= 0) === LEFT_IS_POSITIVE_X ? "left" : "right";
+        this.sensors[side] = {
+          material: object.material,
+          rest: object.material.color.clone(),
+          halo: this.#addHalo(place),
+        };
       }
     });
 
+    // Der Hüllkörper zählt nur, was auch zu sehen ist – die LED ist eben
+    // abgetreten, das Gehäuse kann später folgen.
+    this.#measure(gltf.scene);
+
     this.#invalidate();
     return this;
+  }
+
+  // Äußere Punkte und Mittelpunkt des Sichtbaren. Beides hängt zusammen: Ohne
+  // Gehäuse liegt die Platine nicht mehr in der Mitte der Baugruppe, und eine
+  // Kamera, die weiter auf den Ursprung zielt, schöbe sie an den Bildrand.
+  #measure(root) {
+    const points = extremePoints(root);
+    const box = new THREE.Box3();
+    points.forEach((point) => box.expandByPoint(point));
+    box.getCenter(this.target);
+    this.hull = points.map((point) => point.sub(this.target));
+    this.#updateFraming();
+  }
+
+  // ─── Darstellung wählen ─────────────────────────────
+
+  // Die Konfigurationsseite zeigt zu jedem Reiter, worum es geht: Beim
+  // Tastenreiter fällt das Gehäuse weg und die Sensoren treten hervor, bei
+  // der Radkalibrierung dreht sich das Rad. Der Bildausschnitt wird dabei neu
+  // bestimmt – ohne Gehäuse ist deutlich weniger zu zeigen.
+  setView(name) {
+    const view = VIEWS[name] || VIEWS.live;
+    if (view === this.view) return;
+    this.view = view;
+
+    this.shell.forEach((part) => { part.visible = view.shell; });
+    this.wheelMaterials.forEach((material, index) => {
+      tint(material, this.restWheel[index], view.spin);
+    });
+    this.#showSensors();
+    this.#showLed();
+
+    this.azimuth = view.home.azimuth;
+    this.polar = view.home.polar;
+    this.#measure(this.pivot);
+    this.#invalidate();
+  }
+
+  // Hervorgehoben wird der Sensor einer Seite, sobald dort einer freigegeben
+  // ist. Die Platine trägt je Taste nur ein Gehäuse - ob darin Force oder
+  // Hall misst, ist ihr von außen nicht anzusehen.
+  setSensors(chosen) {
+    this.chosen = chosen;
+    this.#showSensors();
+  }
+
+  #showSensors() {
+    Object.entries(this.sensors).forEach(([side, sensor]) => {
+      const on = this.view === VIEWS.sensors && Boolean(this.chosen[side]);
+      tint(sensor.material, sensor.rest, on, SENSOR_GLOW);
+      sensor.halo.visible = on;
+    });
+    this.#invalidate();
+  }
+
+  // Der Lichthof liegt als Schild im Raum und dreht sich mit dem Blick mit.
+  // Er verdeckt nichts: Er wird addiert, nicht darübergemalt, und hält sich
+  // aus dem Tiefenpuffer heraus - hinter der Platine bleibt er verdeckt.
+  #addHalo(position) {
+    this.haloTexture = this.haloTexture || makeHalo();
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this.haloTexture,
+      color: PRESS_COLOR,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    halo.scale.setScalar(SENSOR_HALO);
+    halo.position.copy(position);
+    halo.visible = false;
+    this.pivot.add(halo);
+    return halo;
   }
 
   // Der Deckel ist ein einziges Bauteil; die Tasten sind darin nur durch den
@@ -270,21 +396,24 @@ export class MouseModel {
   // Leuchtanteil setzt nur die Kante ab.
   setWheelPressed(pressed) {
     this.wheelMaterials.forEach((material, index) => {
-      if (pressed) {
-        material.color.setHex(PRESS_COLOR);
-        material.emissive.setHex(PRESS_COLOR);
-        material.emissiveIntensity = PRESS_GLOW;
-      } else {
-        material.color.copy(this.restWheel[index]);
-        material.emissiveIntensity = 0;
-      }
+      tint(material, this.restWheel[index], pressed);
     });
     this.#invalidate();
   }
 
   setLed(hex, off) {
-    this.ledLight.color.set(hex);
-    this.ledLight.intensity = off ? 0 : LED_LIGHT;
+    this.ledColor = hex;
+    this.ledOff = off;
+    this.#showLed();
+  }
+
+  // Ohne Gehäuse hat das Licht keine Waben mehr, durch die es dringen könnte -
+  // es würde die nackte Platine bloss türkis überziehen und die hervorgehobenen
+  // Teile übertönen. Deshalb bleibt es dort aus.
+  #showLed() {
+    this.ledLight.color.set(this.ledColor || "#12a190");
+    this.ledLight.intensity =
+      this.ledOff || !this.view.shell ? 0 : LED_LIGHT;
     this.#invalidate();
   }
 
@@ -316,13 +445,22 @@ export class MouseModel {
   // Der Abstand gilt für jede erreichbare Blickrichtung, nicht nur für die
   // gerade gezeigte: Sonst wüchse und schrumpfte die Maus beim Drehen. Gesucht
   // ist also die ungünstigste Lage – sie liegt in der Seitenansicht, wo die
-  // Maus ihre ganze Länge quer ins Bild legt.
+  // Maus ihre ganze Länge quer ins Bild legt. Steht die Ansicht fest, genügt
+  // die eine Richtung und das Modell darf entsprechend größer erscheinen.
   #updateFraming() {
     if (!this.hull.length) return;
 
     const vertical = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) * 0.5);
     const horizontal = vertical * this.camera.aspect;
-    const [lowPolar, highPolar] = POLAR_LIMITS;
+
+    if (!this.view.turn) {
+      this.distance = this.#fitDistance(
+        this.view.home.azimuth, this.view.home.polar, horizontal, vertical)
+        * FIT_MARGIN;
+      return;
+    }
+
+    const [lowPolar, highPolar] = this.view.turn;
     let worst = 0;
 
     for (let a = 0; a < FRAMING_AZIMUTHS; a++) {
@@ -361,18 +499,31 @@ export class MouseModel {
 
   #draw() {
     this.frame = 0;
-    const idle = performance.now() - this.lastInput;
+    const now = performance.now();
+    const elapsed = Math.min(now - (this.lastFrame || now), 100) / 1000;
+    this.lastFrame = now;
+    const idle = now - this.lastInput;
     let moving = false;
 
+    // Bei der Radkalibrierung dreht sich das Rad von selbst weiter. Das ist
+    // zugleich der einzige Fall, in dem ohne Zutun ein Bild nach dem anderen
+    // gebraucht wird.
+    if (this.view.spin) {
+      const step = THREE.MathUtils.degToRad(SPIN_SPEED * elapsed);
+      this.wheels.forEach((wheel) => { wheel.rotation.x -= step; });
+      moving = true;
+    }
+
     if (idle > RETURN_DELAY) {
-      const azimuth = shortestAngle(this.azimuth, HOME.azimuth);
+      const home = this.view.home;
+      const azimuth = shortestAngle(this.azimuth, home.azimuth);
       this.azimuth += azimuth * RETURN_EASE;
-      this.polar += (HOME.polar - this.polar) * RETURN_EASE;
-      moving = Math.abs(azimuth) > 1e-4
-        || Math.abs(HOME.polar - this.polar) > 1e-4;
-      if (!moving) {
-        this.azimuth = HOME.azimuth;
-        this.polar = HOME.polar;
+      this.polar += (home.polar - this.polar) * RETURN_EASE;
+      moving = moving || Math.abs(azimuth) > 1e-4
+        || Math.abs(home.polar - this.polar) > 1e-4;
+      if (Math.abs(azimuth) <= 1e-4) {
+        this.azimuth = home.azimuth;
+        this.polar = home.polar;
       }
     }
 
@@ -381,8 +532,9 @@ export class MouseModel {
       Math.cos(this.polar),
       Math.sin(this.polar) * Math.cos(this.azimuth),
     );
-    this.camera.position.copy(this.direction).multiplyScalar(this.distance);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.copy(this.direction)
+      .multiplyScalar(this.distance).add(this.target);
+    this.camera.lookAt(this.target);
 
     this.renderer.render(this.scene, this.camera);
     if (moving) this.#invalidate();
@@ -391,6 +543,47 @@ export class MouseModel {
 
 function clamp(value, low, high) {
   return Math.min(high, Math.max(low, value));
+}
+
+// Wo ein Bauteil steckt, sagt seine Geometrie, nicht sein Knoten: Der Export
+// legt alle Teile in einen gemeinsamen Ursprung und verschiebt allein ihre
+// Punkte. `getWorldPosition` gäbe deshalb überall die Mitte des Modells.
+function centreOf(mesh, out) {
+  mesh.geometry.computeBoundingBox();
+  return mesh.geometry.boundingBox.getCenter(out)
+    .applyMatrix4(mesh.matrixWorld);
+}
+
+// Weicher Lichtfleck, in der Mitte hell und nach außen auslaufend.
+function makeHalo() {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+
+  const context = canvas.getContext("2d");
+  const glow = context.createRadialGradient(
+    size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  glow.addColorStop(0, "rgba(255, 255, 255, .85)");
+  glow.addColorStop(.3, "rgba(255, 255, 255, .3)");
+  glow.addColorStop(1, "rgba(255, 255, 255, 0)");
+  context.fillStyle = glow;
+  context.fillRect(0, 0, size, size);
+
+  return new THREE.CanvasTexture(canvas);
+}
+
+// Hervorheben heißt einfärben statt nur aufhellen: Rad und Sensorgehäuse sind
+// dunkel, ein reiner Leuchtanteil ginge darauf unter.
+function tint(material, rest, on, glow = PRESS_GLOW) {
+  if (on) {
+    material.color.setHex(PRESS_COLOR);
+    material.emissive.setHex(PRESS_COLOR);
+    material.emissiveIntensity = glow;
+  } else {
+    material.color.copy(rest);
+    material.emissiveIntensity = 0;
+  }
 }
 
 // Wo läuft der Schlitz zwischen den Tasten aus? Vor seinem Ende ist der Deckel
@@ -429,7 +622,7 @@ function extremePoints(root) {
 
   root.updateMatrixWorld(true);
   root.traverse((object) => {
-    if (!object.isMesh) return;
+    if (!object.isMesh || !object.visible) return;
     const position = object.geometry.getAttribute("position");
     for (let i = 0; i < position.count; i++) {
       vertex.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld);
