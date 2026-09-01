@@ -23,13 +23,7 @@ const POLAR_LIMITS = [0.25, 1.45];
 
 // Die nackte Platine ist flach: Von schräg oben zeigt sie am meisten von sich
 // und füllt das Bild, statt als Strich darin zu liegen.
-//
-// Welche Seite oben liegt, hängt am eingestellten Sensor: Der Hall-Sensor
-// sitzt auf dem Steg, der Force-Sensor darunter. Die Ansicht dreht sich
-// deshalb mit der Auswahl – sonst zeigte sie die Rückseite dessen, worum es
-// gerade geht.
 const BOARD_HOME = { azimuth: 0.55, polar: 0.62 };
-const BOARD_UNDER = { azimuth: 0.55, polar: Math.PI - 0.62 };
 
 // Beim Blick auf die nackte Platine darf der Betrachter auch darunter
 // schauen. Die Pole bleiben knapp ausgespart - genau senkrecht von oben
@@ -65,6 +59,13 @@ const LEFT_IS_POSITIVE_X = true;
 const EDGE_ANGLE = 30;                                   // Grad
 const EDGE_COLOR = 0x06181a;
 const EDGE_OPACITY = 0.55;
+
+// Liegt der eingestellte Sensor hinter der Platine, tritt sein gestrichelter
+// Umriss an seine Stelle. Er ist heller gehalten als die Hervorhebung selbst:
+// Eine Linie hat nur ein Pixel Breite, ihr bleibt allein die Helligkeit, um
+// sich vom Grün der Platine abzusetzen.
+const HIDDEN_COLOR = 0x8cffee;
+const HIDDEN_OPACITY = 0.9;
 
 // Gedrückt wird die Taste eingefärbt, nicht nur aufgehellt: Auf dem hellen
 // Deckel ginge ein reiner Leuchtanteil im Glanzlicht unter. Die Farbe ist
@@ -287,13 +288,13 @@ export class MouseModel {
         // Der Name nennt die Familie, die Lage die Seite – letzteres nach
         // derselben Regel wie bei den Tasten, damit beides zusammenpasst.
         centreOf(object, place);
-        this.#addEdges(object);
         const side = (place.x >= 0) === LEFT_IS_POSITIVE_X ? "left" : "right";
         const family = name.includes("hall") ? "hall" : "force";
         this.sensors[`${family}.${side}`] = {
           material: object.material,
           rest: object.material.color.clone(),
           halo: this.#addHalo(place),
+          hidden: this.#addEdges(object),
           position: place.clone(),
           // Der Hall-Sensor sitzt oben auf dem Steg, der Force-Sensor unten.
           facing: family === "hall" ? 1 : -1,
@@ -346,7 +347,7 @@ export class MouseModel {
     this.#showSensors();
     this.#showLed();
 
-    const home = this.#home();
+    const home = this.view.home;
     this.azimuth = home.azimuth;
     this.polar = home.polar;
     this.#measure(this.pivot);
@@ -388,19 +389,9 @@ export class MouseModel {
     this.#showSensors();
   }
 
-  // Die Ruhelage der Sensoransicht folgt der Auswahl: Sie zeigt die Seite der
-  // Platine, auf der die eingestellten Sensoren sitzen. Sind es verschiedene
-  // – links Hall, rechts Force –, bleibt es beim Blick von oben; eine Seite
-  // liesse sich dann ohnehin nicht bevorzugen.
-  #home() {
-    if (this.view !== VIEWS.sensors) return this.view.home;
-
-    const sides = [this.chosen.left, this.chosen.right].filter(Boolean);
-    const underneath = sides.length > 0
-      && sides.every((family) => family === "force");
-    return underneath ? BOARD_UNDER : BOARD_HOME;
-  }
-
+  // Die Ruhelage der Sensoransicht zeigt die Platine von schräg oben. Dass
+  // die Force-Sensoren darunter sitzen, trägt jetzt die gestrichelte
+  // Darstellung – die Ansicht muss sich dafür nicht mehr umdrehen.
   #showSensors() {
     Object.entries(this.sensors).forEach(([key, sensor]) => {
       const [family, side] = key.split(".");
@@ -416,20 +407,27 @@ export class MouseModel {
     this.#invalidate();
   }
 
-  // Wie weit ist die Seite des Sensors dem Betrachter zugewandt? Je Bild neu,
-  // denn die Antwort ändert sich mit jeder Drehung.
-  #faceHalos() {    Object.values(this.sensors).forEach((sensor) => {
-      if (!sensor.lit) return;
+  // Auf welcher Seite der Platine steht der Betrachter? Je Bild neu, denn die
+  // Antwort ändert sich mit jeder Drehung. Der zugewandte Sensor bekommt
+  // seinen Lichthof, der abgewandte seinen gestrichelten Umriss – beides nie
+  // zugleich, sonst hätte man Schein und Strich am selben Ort.
+  #faceMarks() {
+    Object.values(this.sensors).forEach((sensor) => {
       const facing = this.direction.y * sensor.facing;
-      sensor.halo.material.opacity = THREE.MathUtils.smoothstep(facing, ...HALO_FADE);
-      sensor.halo.visible = facing > HALO_FADE[0];
+      const near = facing > HALO_FADE[0];
+
+      sensor.halo.visible = sensor.lit && near;
+      sensor.halo.material.opacity =
+        THREE.MathUtils.smoothstep(facing, ...HALO_FADE);
+      sensor.hidden.visible = sensor.lit && !near;
     });
   }
 
   // Der Lichthof liegt als Schild im Raum und dreht sich mit dem Blick mit.
   // Er verdeckt nichts: Er wird addiert, nicht darübergemalt, und hält sich
   // aus dem Tiefenpuffer heraus - hinter der Platine bleibt er verdeckt.
-  #addHalo(position) {    this.haloTexture = this.haloTexture || makeHalo();
+  #addHalo(position) {
+    this.haloTexture = this.haloTexture || makeHalo();
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({
       map: this.haloTexture,
       color: PRESS_COLOR,
@@ -448,23 +446,48 @@ export class MouseModel {
   // ohne dass jemand ihre Lage nachführen müsste. Die Fläche selbst rückt
   // dabei ein Stück nach hinten – sonst läge die Linie genau auf ihr und der
   // Tiefenpuffer könnte sich nicht entscheiden.
+  //
+  // Denselben Umriss gibt es ein zweites Mal, gestrichelt und ohne
+  // Tiefenprüfung: Er tritt an die Stelle des Sensors, wenn dieser hinter der
+  // Platine liegt. Verdeckte Kanten gestrichelt zu zeichnen ist die Regel der
+  // technischen Zeichnung – und sie behauptet nichts Falsches, anders als ein
+  // Schein, der durch das Material zu dringen scheint.
   #addEdges(mesh) {
     const material = mesh.material;
     material.polygonOffset = true;
     material.polygonOffsetFactor = 1;
     material.polygonOffsetUnits = 1;
 
-    const edges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(mesh.geometry, EDGE_ANGLE),
-      new THREE.LineBasicMaterial({
-        color: EDGE_COLOR,
-        transparent: true,
-        opacity: EDGE_OPACITY,
-      }));
-
+    const outline = new THREE.EdgesGeometry(mesh.geometry, EDGE_ANGLE);
+    const edges = new THREE.LineSegments(outline, new THREE.LineBasicMaterial({
+      color: EDGE_COLOR,
+      transparent: true,
+      opacity: EDGE_OPACITY,
+    }));
     edges.visible = false;
     mesh.add(edges);
     this.edges.push(edges);
+
+    // Die Strichlänge folgt der Größe des Bauteils. Ein fester Wert ginge
+    // nicht: Die Eckpunkte liegen quantisiert vor, und jedes Netz bringt
+    // seinen eigenen Maßstab mit – dieselbe Zahl ergäbe je Sensor ein
+    // anderes Muster.
+    outline.computeBoundingSphere();
+    const dash = outline.boundingSphere.radius / 7;
+
+    const hidden = new THREE.LineSegments(outline, new THREE.LineDashedMaterial({
+      color: HIDDEN_COLOR,
+      dashSize: dash,
+      gapSize: dash * 0.8,
+      transparent: true,
+      opacity: HIDDEN_OPACITY,
+      depthTest: false,
+    }));
+    hidden.computeLineDistances();
+    hidden.renderOrder = 1;
+    hidden.visible = false;
+    mesh.add(hidden);
+    return hidden;
   }
 
   // Der Deckel ist ein einziges Bauteil; die Tasten sind darin nur durch den
@@ -598,7 +621,7 @@ export class MouseModel {
     const horizontal = vertical * this.camera.aspect;
 
     if (!this.view.turn) {
-      const home = this.#home();
+      const home = this.view.home;
       this.baseDistance = this.#fitDistance(
         home.azimuth, home.polar, horizontal, vertical) * FIT_MARGIN;
       if (!this.focus) this.distance = this.baseDistance;
@@ -670,7 +693,7 @@ export class MouseModel {
       moving = moving || Math.abs(swing) > 1e-3
         || Math.abs(this.focus.polar - this.polar) > 1e-3;
     } else if (idle > RETURN_DELAY) {
-      const home = this.#home();
+      const home = this.view.home;
       const azimuth = shortestAngle(this.azimuth, home.azimuth);
       this.azimuth += azimuth * RETURN_EASE;
       this.polar += (home.polar - this.polar) * RETURN_EASE;
@@ -696,7 +719,7 @@ export class MouseModel {
       Math.cos(this.polar),
       Math.sin(this.polar) * Math.cos(this.azimuth),
     );
-    this.#faceHalos();
+    this.#faceMarks();
     this.camera.position.copy(this.direction)
       .multiplyScalar(this.distance).add(this.target);
     this.camera.lookAt(this.target);
