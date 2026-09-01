@@ -78,14 +78,19 @@ const PRESS_GLOW = 0.35;
 // selbst hell bliebe es klein. Deshalb bekommt es zusätzlich einen Lichthof,
 // so wie das Video die Bauteile mit einer Fahne herausstellt.
 const SENSOR_GLOW = 1.6;
-const SENSOR_HALO = 0.016;                               // m
+const SENSOR_HALO = 0.028;                               // m
 
-// Der Lichthof gehört auf die Seite der Platine, auf der sein Sensor sitzt.
-// Von der anderen deckt ihn die Platine ab, sein Schein dränge nur an ihren
-// Schlitzen vorbei – und sähe aus, als leuchte er durch das Material. Er
-// blendet deshalb aus, sobald der Blick auf die abgewandte Seite fällt, und
-// zwar weich: Bei streifendem Blick springt er sonst an und aus.
-const HALO_FADE = [0.04, 0.30];                          // Kosinus zur Fläche
+// Der Lichthof scheint durch die Platine hindurch. Der Tiefenpuffer bliebe
+// zwar der ehrlichere Weg, gibt aber ein hässliches Bild: Vom Schein kämen
+// nur die Teile durch, die zufällig auf die Schlitze neben den Stegen
+// treffen, und statt eines Kreises sähe man deren Umrisse. Lieber ein
+// sauberer Kreis, der über allem liegt – dass der Sensor dahinter sitzt,
+// sagt ohnehin sein gestrichelter Umriss.
+//
+// Ganz senkrecht auf die Platinenkante geschaut würde der Kreis bedeutungs-
+// los: Er stünde über einer Fläche, die man gar nicht sieht. Dieser Wert
+// sagt, ab welcher Neigung die Seite als abgewandt gilt.
+const FACING_EDGE = 0.04;                                // Kosinus zur Fläche
 
 // Zeigt der Betrachter auf eine Sensorzeile, rückt das Modell den Sensor
 // heran. Die Blickrichtung dreht dabei mit: Der Hall-Sensor liegt oben auf
@@ -408,24 +413,19 @@ export class MouseModel {
   }
 
   // Auf welcher Seite der Platine steht der Betrachter? Je Bild neu, denn die
-  // Antwort ändert sich mit jeder Drehung. Der zugewandte Sensor bekommt
-  // seinen Lichthof, der abgewandte seinen gestrichelten Umriss – beides nie
-  // zugleich, sonst hätte man Schein und Strich am selben Ort.
+  // Antwort ändert sich mit jeder Drehung. Sie entscheidet allein über den
+  // gestrichelten Umriss; der Lichthof scheint in jedem Fall herauf.
   #faceMarks() {
     Object.values(this.sensors).forEach((sensor) => {
       const facing = this.direction.y * sensor.facing;
-      const near = facing > HALO_FADE[0];
-
-      sensor.halo.visible = sensor.lit && near;
-      sensor.halo.material.opacity =
-        THREE.MathUtils.smoothstep(facing, ...HALO_FADE);
-      sensor.hidden.visible = sensor.lit && !near;
+      sensor.hidden.visible = sensor.lit && facing <= FACING_EDGE;
     });
   }
 
   // Der Lichthof liegt als Schild im Raum und dreht sich mit dem Blick mit.
-  // Er verdeckt nichts: Er wird addiert, nicht darübergemalt, und hält sich
-  // aus dem Tiefenpuffer heraus - hinter der Platine bleibt er verdeckt.
+  // Er verdeckt nichts, denn er wird addiert statt darübergemalt, und er
+  // fragt nicht nach der Tiefe: So bleibt er ein Kreis, auch wenn zwischen
+  // ihm und dem Auge die Platine steht.
   #addHalo(position) {
     this.haloTexture = this.haloTexture || makeHalo();
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -433,6 +433,7 @@ export class MouseModel {
       color: PRESS_COLOR,
       transparent: true,
       depthWrite: false,
+      depthTest: false,
       blending: THREE.AdditiveBlending,
     }));
     halo.scale.setScalar(SENSOR_HALO);
@@ -758,7 +759,10 @@ function centreOf(mesh, out) {
     .applyMatrix4(mesh.matrixWorld);
 }
 
-// Weicher Lichtfleck, in der Mitte hell und nach außen auslaufend.
+// Weicher Lichtfleck, in der Mitte hell und nach außen auslaufend. Der Kern
+// bleibt bewusst gedämpft: Der Schein wird addiert, und über der ohnehin
+// hellen Platine liefe er sonst ins Weiße aus – der Sensor verschwände in
+// dem Fleck, der ihn zeigen soll.
 function makeHalo() {
   const size = 64;
   const canvas = document.createElement("canvas");
@@ -768,8 +772,9 @@ function makeHalo() {
   const context = canvas.getContext("2d");
   const glow = context.createRadialGradient(
     size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  glow.addColorStop(0, "rgba(255, 255, 255, .85)");
-  glow.addColorStop(.3, "rgba(255, 255, 255, .3)");
+  glow.addColorStop(0, "rgba(255, 255, 255, .42)");
+  glow.addColorStop(.25, "rgba(255, 255, 255, .26)");
+  glow.addColorStop(.6, "rgba(255, 255, 255, .08)");
   glow.addColorStop(1, "rgba(255, 255, 255, 0)");
   context.fillStyle = glow;
   context.fillRect(0, 0, size, size);
