@@ -73,6 +73,13 @@ const PRESS_GLOW = 0.35;
 const SENSOR_GLOW = 1.6;
 const SENSOR_HALO = 0.016;                               // m
 
+// Der Lichthof gehört auf die Seite der Platine, auf der sein Sensor sitzt.
+// Von der anderen deckt ihn die Platine ab, sein Schein dränge nur an ihren
+// Schlitzen vorbei – und sähe aus, als leuchte er durch das Material. Er
+// blendet deshalb aus, sobald der Blick auf die abgewandte Seite fällt, und
+// zwar weich: Bei streifendem Blick springt er sonst an und aus.
+const HALO_FADE = [0.04, 0.30];                          // Kosinus zur Fläche
+
 // Zeigt der Betrachter auf eine Sensorzeile, rückt das Modell den Sensor
 // heran. Die Blickrichtung dreht dabei mit: Der Hall-Sensor liegt oben auf
 // dem Steg, der Force-Sensor unten darunter – ohne den Schwenk sähe man nur
@@ -282,6 +289,9 @@ export class MouseModel {
           rest: object.material.color.clone(),
           halo: this.#addHalo(place),
           position: place.clone(),
+          // Der Hall-Sensor sitzt oben auf dem Steg, der Force-Sensor unten.
+          facing: family === "hall" ? 1 : -1,
+          lit: false,
         };
       }
     });
@@ -379,10 +389,22 @@ export class MouseModel {
         && (aimed || this.chosen[side] === family);
 
       tint(sensor.material, sensor.rest, on, SENSOR_GLOW);
+      sensor.lit = on;
       sensor.halo.visible = on;
       sensor.halo.scale.setScalar(aimed ? SENSOR_HALO * FOCUS_HALO : SENSOR_HALO);
     });
     this.#invalidate();
+  }
+
+  // Wie weit ist die Seite des Sensors dem Betrachter zugewandt? Je Bild neu,
+  // denn die Antwort ändert sich mit jeder Drehung.
+  #faceHalos() {
+    Object.values(this.sensors).forEach((sensor) => {
+      if (!sensor.lit) return;
+      const facing = this.direction.y * sensor.facing;
+      sensor.halo.material.opacity = THREE.MathUtils.smoothstep(facing, ...HALO_FADE);
+      sensor.halo.visible = facing > HALO_FADE[0];
+    });
   }
 
   // Der Lichthof liegt als Schild im Raum und dreht sich mit dem Blick mit.
@@ -655,6 +677,7 @@ export class MouseModel {
       Math.cos(this.polar),
       Math.sin(this.polar) * Math.cos(this.azimuth),
     );
+    this.#faceHalos();
     this.camera.position.copy(this.direction)
       .multiplyScalar(this.distance).add(this.target);
     this.camera.lookAt(this.target);
