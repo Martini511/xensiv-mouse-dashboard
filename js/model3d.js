@@ -25,10 +25,9 @@ const HOME = { azimuth: 0.55, polar: 1.02 };
 const POLAR_LIMITS = [0.25, 1.45];
 
 // Der optische Sensor sitzt auf der Unterseite. Wer seine Auflösung einstellt,
-// soll ihn sehen - das Gerät liegt dafür auf dem Rücken. Der Höhenwinkel ist
-// die Spiegelung dessen, was die Live-Ansicht von oben zulässt.
+// soll ihn sehen - das Gerät liegt dafür auf dem Rücken. Gedreht wird hier
+// nicht: Es gibt genau eine Seite, um die es geht.
 const UNDER_HOME = { azimuth: 0.55, polar: Math.PI - 0.95 };
-const POLAR_UNDER = [Math.PI - POLAR_LIMITS[1], Math.PI - POLAR_LIMITS[0]];
 
 // Die nackte Platine ist flach: Von schräg oben zeigt sie am meisten von sich
 // und füllt das Bild, statt als Strich darin zu liegen.
@@ -159,8 +158,16 @@ const LED_LIGHT = 1.6;
 // Das Bewegungslicht im Fenster der Unterseite. Es steht für die Abtastung:
 // je feiner die Auflösung, desto heller. Rot, weil ein optischer Maussensor
 // rot leuchtet - die türkise Farbe gehört der Deckenbeleuchtung.
-const DPI_COLOR = 0xff5340;
-const DPI_LIGHT = [0.02, 0.42];                          // dunkelster, hellster
+//
+// Zu sehen ist vor allem der Schein nach außen, derselbe Lichthof wie an den
+// hervorgehobenen Sensoren. Die Lampe im Gehäuse begleitet ihn nur: Sie legt
+// etwas Rot auf die Kanten der Öffnung, damit der Schein nicht wie ein
+// aufgeklebter Fleck wirkt.
+const DPI_COLOR = 0xff2a18;
+const DPI_LIGHT = [0.02, 0.30];                          // dunkelster, hellster
+const DPI_HALO = [0.010, 0.032];                         // m, Durchmesser
+const DPI_HALO_FADE = [0.25, 1.0];                       // Deckkraft
+const DPI_HALO_OUT = 0.004;                              // m, vor dem Fenster
 
 // Das Rad dreht sich bei der Kalibrierung von selbst weiter - so ist auf
 // einen Blick klar, worum es auf dem Reiter geht.
@@ -173,7 +180,7 @@ const SPIN_SPEED = 80;                                   // Grad je Sekunde
 const VIEWS = {
   live: { shell: true, spin: false, turn: POLAR_LIMITS, home: HOME },
   light: { shell: true, spin: false, turn: null, home: HOME },
-  pointer: { shell: true, spin: false, turn: POLAR_UNDER, home: UNDER_HOME },
+  pointer: { shell: true, spin: false, turn: null, home: UNDER_HOME },
   sensors: { shell: false, spin: false, turn: POLAR_FREE, home: BOARD_HOME },
   wheel: {
     shell: false, spin: true, turn: POLAR_FREE, home: WHEEL_HOME,
@@ -283,6 +290,7 @@ export class MouseModel {
     // den Schein am Ort: Er soll aus der Öffnung dringen, nicht die halbe
     // Schale von innen ausleuchten.
     this.dpiLight = new THREE.PointLight(DPI_COLOR, 0, 0.05, 1.8);
+    this.dpiHalo = null;
     this.dpiShare = 0;
     this.scene.add(this.dpiLight);
   }
@@ -356,6 +364,13 @@ export class MouseModel {
       if (name === DPI) {
         object.visible = false;
         centreOf(object, this.dpiLight.position);
+
+        // Der Schein gehört vor das Fenster, nicht dahinter. Die Lampe steht
+        // im Gehäuse, wo sie hingehört; der Lichthof rückt nach außen, sonst
+        // läge er hinter dem Boden, durch den er dringen soll.
+        this.dpiHalo = this.#addHalo(this.dpiLight.position);
+        this.dpiHalo.position.y -= DPI_HALO_OUT;
+        this.dpiHalo.material.color.setHex(DPI_COLOR);
       }
       if (name.startsWith(SENSOR)) {
         // Der Name nennt die Familie, die Lage die Seite – letzteres nach
@@ -394,6 +409,7 @@ export class MouseModel {
     // Die Ansicht kann schon vor dem Laden gesetzt worden sein; erst jetzt
     // gibt es die Sensoren, die sie hervorhebt.
     this.#showSensors();
+    this.#showDpi();
     this.#invalidate();
     return this;
   }
@@ -737,10 +753,16 @@ export class MouseModel {
   // Ansicht bliebe vom Licht ein roter Fleck im Inneren - sichtbar durch die
   // Waben, ohne dass irgendetwas ihn erklaerte.
   #showDpi() {
-    const [dark, bright] = DPI_LIGHT;
-    this.dpiLight.intensity = this.view === VIEWS.pointer
-      ? dark + (bright - dark) * this.dpiShare
-      : 0;
+    const on = this.view === VIEWS.pointer;
+    const share = this.dpiShare;
+    const between = ([low, high]) => low + (high - low) * share;
+
+    this.dpiLight.intensity = on ? between(DPI_LIGHT) : 0;
+    if (this.dpiHalo) {
+      this.dpiHalo.visible = on;
+      this.dpiHalo.scale.setScalar(between(DPI_HALO));
+      this.dpiHalo.material.opacity = between(DPI_HALO_FADE);
+    }
     this.#invalidate();
   }
 
