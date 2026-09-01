@@ -15,6 +15,7 @@ const BODY = "mouse_body";
 const LED = "led";
 const SENSOR = "sensor";
 const WHEEL = ["wheel_1055", "wheel_cover"];
+const GUARD = "axis_holder";
 
 // Blickrichtung ohne Zutun des Betrachters: leicht von rechts oben auf die
 // Vorderseite. Winkel als Kugelkoordinaten um den Modellmittelpunkt.
@@ -28,13 +29,18 @@ const BOARD_HOME = { azimuth: 0.55, polar: 0.62 };
 // Der Radsensor liegt unter dem Achshalter und ist von fast überall verdeckt.
 // Ein Strahlentest über alle Blickrichtungen findet genau zwei, aus denen er
 // ganz frei steht - diese ist die bessere: von hinten über die Platine, das
-// Rad aufrecht in der Mitte und der Sensor davor. Weil die Radansicht sich
-// nicht drehen lässt, bleibt es dabei.
+// Rad aufrecht in der Mitte und der Sensor davor. Von hier aus beginnt die
+// Radansicht, und hierhin gleitet sie zurück.
 const WHEEL_HOME = { azimuth: 3.53, polar: 1.08 };
 
 // Nur diesen einen Sensor gibt es, und die Kalibrierung dreht sich um ihn.
 const WHEEL_SENSOR = "wheel.centre";
 const WHEEL_SENSOR_NAME = "TLI493D-M4D7";
+
+// Von wo aus der Prüfstrahl auf den Sensor zuläuft, und wie viel Luft er dem
+// Bauteil selbst lässt - sonst meldete dessen eigene Oberfläche einen Treffer.
+const GUARD_REACH = 0.3;                                 // m
+const GUARD_SKIN = 0.0015;                               // m
 
 // Beim Blick auf die nackte Platine darf der Betrachter auch darunter
 // schauen. Die Pole bleiben knapp ausgespart - genau senkrecht von oben
@@ -149,7 +155,7 @@ const VIEWS = {
   light: { shell: true, spin: false, turn: null, home: HOME },
   sensors: { shell: false, spin: false, turn: POLAR_FREE, home: BOARD_HOME },
   wheel: {
-    shell: false, spin: true, turn: null, home: WHEEL_HOME,
+    shell: false, spin: true, turn: POLAR_FREE, home: WHEEL_HOME,
     tag: { key: WHEEL_SENSOR, name: WHEEL_SENSOR_NAME },
   },
 };
@@ -198,6 +204,10 @@ export class MouseModel {
     this.baseTarget = new THREE.Vector3();
     this.place = new THREE.Vector3();
     this.worldUp = new THREE.Vector3(0, 1, 0);
+    this.guard = null;
+    this.ray = new THREE.Raycaster();
+    this.probe = new THREE.Vector3();
+    this.away = new THREE.Vector3();
 
     // Das Namensschild ist eine Beschriftung, kein Bauteil: Als Text im
     // Dokument bleibt es bei jeder Auflösung scharf und nimmt die Schrift
@@ -301,6 +311,7 @@ export class MouseModel {
       }
       if (name.includes(COVER)) this.#prepareCover(object);
       if (name.includes(COVER) || name.includes(BODY)) this.shell.push(object);
+      if (name.includes(GUARD)) this.guard = object;
       if (name === LED) {
         // Der Körper dient nur als Ortsangabe: Er verrät, wo auf der Platine
         // die LED sitzt, und tritt danach ab.
@@ -325,9 +336,12 @@ export class MouseModel {
           hidden: this.#addEdges(object),
           position: place.clone(),
           // Der Hall-Sensor sitzt oben auf dem Steg, der Force-Sensor unten.
-          // Der Radsensor liegt ebenfalls oben; die Radansicht schaut von
-          // dort auf ihn, sein Umriss bleibt darum durchgezogen.
+          // Der Radsensor liegt ebenfalls oben, aber unter dem Achshalter:
+          // Dass seine Seite dem Betrachter zugewandt ist, heisst bei ihm
+          // noch nicht, dass man ihn sieht.
           facing: family === "force" ? -1 : 1,
+          guarded: family === "wheel",
+          plain: false,
           lit: false,
         };
       }
@@ -456,8 +470,26 @@ export class MouseModel {
   #faceMarks() {
     Object.values(this.sensors).forEach((sensor) => {
       const facing = this.direction.y * sensor.facing;
-      sensor.hidden.visible = sensor.lit && facing <= FACING_EDGE;
+      // Die Probe kostet eine knappe halbe Millisekunde - wenig, aber je
+      // Bild. Wer gerade nicht leuchtet, braucht sie gar nicht.
+      sensor.plain = facing > FACING_EDGE
+        && !(sensor.guarded && sensor.lit && this.#blocked(sensor.position));
+      sensor.hidden.visible = sensor.lit && !sensor.plain;
     });
+  }
+
+  // Steht der Achshalter im Weg? Ein Strahl von aussen auf das Bauteil sagt
+  // es. Mehr als dieses eine Teil braucht die Probe nicht: Die Platine deckt
+  // schon der Seitenvergleich ab, und gegen alle sichtbaren Netze geprüft kam
+  // in 352 von 360 Blickrichtungen dasselbe heraus - die acht Ausnahmen
+  // liegen genau auf der Kante, wo man ohnehin nichts erkennt. Das Netz des
+  // Halters ist klein genug, dass die Probe je Bild nicht ins Gewicht fällt.
+  #blocked(position) {
+    if (!this.guard) return false;
+    this.probe.copy(this.direction).multiplyScalar(GUARD_REACH).add(position);
+    this.ray.set(this.probe, this.away.copy(this.direction).negate());
+    return this.ray.intersectObject(this.guard, false)
+      .some((hit) => hit.distance < GUARD_REACH - GUARD_SKIN);
   }
 
   // Der Lichthof liegt als Schild im Raum und dreht sich mit dem Blick mit.
@@ -772,7 +804,11 @@ export class MouseModel {
   // Kamera zurückgerechnet, damit es beim Heranfahren mitwandert. Der Versatz
   // des Zeichenfelds gehört dazu - es steht mittig in der Bühne, nicht bündig.
   #placeLabel() {
-    if (!this.marked) {
+    // Das Schild nennt ein Bauteil, das man sieht. Steckt es hinter etwas,
+    // sagt das seine Strichlinie - ein Name daneben behauptete zu viel. Beim
+    // Zeigen auf eine Zeile gilt das nicht: Dort holt die Kamera den Sensor
+    // gerade erst hervor, und das Schild soll den Weg dorthin begleiten.
+    if (!this.marked || (!this.focus && !this.marked.plain)) {
       this.label.hidden = true;
       return;
     }
