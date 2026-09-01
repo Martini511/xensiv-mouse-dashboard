@@ -51,12 +51,11 @@ const RETURN_EASE = 0.055;
 // dahinter – seine linke Taste liegt damit auf der +X-Seite des Modells.
 const LEFT_IS_POSITIVE_X = true;
 
-// Ohne Gehäuse steht die Platine frei im Raum, und ihre grauen Quader laufen
-// dort ineinander – gleiche Farbe, gleiche Rauheit, nur die Schattierung
-// trennt sie. Eine Linie an jeder scharfen Kante gibt ihnen ihre Form
-// zurück, wie in einer technischen Zeichnung. Der Schwellwinkel hält die
-// Rundungen frei: Ein Zylinder soll seine Silhouette zeigen, nicht jede
-// einzelne Facette seiner Tesselierung.
+// Die vier Sensoren sind drei Millimeter groß und haben dieselbe Farbe wie
+// die übrige Bestückung. Eine Linie an ihren scharfen Kanten hebt sie aus
+// der Reihe der Quader heraus, auch wenn sie gerade nicht eingefärbt sind.
+// Der Schwellwinkel hält Rundungen frei: Gezeigt wird die Silhouette, nicht
+// jede Facette der Tesselierung.
 const EDGE_ANGLE = 30;                                   // Grad
 const EDGE_COLOR = 0x06181a;
 const EDGE_OPACITY = 0.55;
@@ -264,14 +263,7 @@ export class MouseModel {
         this.restWheel.push(object.material.color.clone());
       }
       if (name.includes(COVER)) this.#prepareCover(object);
-      if (name.includes(COVER) || name.includes(BODY)) {
-        this.shell.push(object);
-      } else {
-        // Die Schalen bleiben aussen vor: Sie sind gerade dann unsichtbar,
-        // wenn die Kanten gezeigt werden, und stellen mit Abstand die
-        // meisten Dreiecke - das Ableiten ihrer Kanten waere umsonst.
-        this.#addEdges(object);
-      }
+      if (name.includes(COVER) || name.includes(BODY)) this.shell.push(object);
       if (name === LED) {
         // Der Körper dient nur als Ortsangabe: Er verrät, wo auf der Platine
         // die LED sitzt, und tritt danach ab.
@@ -282,6 +274,7 @@ export class MouseModel {
         // Der Name nennt die Familie, die Lage die Seite – letzteres nach
         // derselben Regel wie bei den Tasten, damit beides zusammenpasst.
         centreOf(object, place);
+        this.#addEdges(object);
         const side = (place.x >= 0) === LEFT_IS_POSITIVE_X ? "left" : "right";
         const family = name.includes("hall") ? "hall" : "force";
         this.sensors[`${family}.${side}`] = {
@@ -328,7 +321,7 @@ export class MouseModel {
     this.shell.forEach((part) => { part.visible = view.shell; });
 
     // Gezeigt werden die Kanten genau dann, wenn das Gehäuse fehlt: Am
-    // vollständigen Gerät sind die Bauteile ohnehin verdeckt.
+    // vollständigen Gerät sind die Sensoren ohnehin verdeckt.
     this.edges.forEach((line) => { line.visible = !view.shell; });
 
     this.wheelMaterials.forEach((material, index) => {
@@ -410,10 +403,10 @@ export class MouseModel {
     return halo;
   }
 
-  // Die Kanten hängen als Kind am Bauteil: So machen sie jede Bewegung mit,
-  // auch die des Rads, ohne dass jemand ihre Lage nachführen müsste. Die
-  // Fläche selbst rückt dabei ein Stück nach hinten – sonst läge die Linie
-  // genau auf ihr und der Tiefenpuffer könnte sich nicht entscheiden.
+  // Die Kanten hängen als Kind am Sensor: So machen sie jede Bewegung mit,
+  // ohne dass jemand ihre Lage nachführen müsste. Die Fläche selbst rückt
+  // dabei ein Stück nach hinten – sonst läge die Linie genau auf ihr und der
+  // Tiefenpuffer könnte sich nicht entscheiden.
   #addEdges(mesh) {
     const material = mesh.material;
     material.polygonOffset = true;
