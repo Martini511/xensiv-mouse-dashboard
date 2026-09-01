@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=14">
+  <link rel="stylesheet" href="./style.css?v=15">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -235,7 +235,7 @@
         </summary>
         <div class="accordion-body">
           <div class="toolbar">
-            <span class="control-title">F&Uuml;NF SENSOREN &middot; SCHWELLWERT 0 &ndash; 127
+            <span class="control-title">VIER SENSOREN &middot; SCHWELLWERT 0 &ndash; 127
               <b class="raw-answer" id="button-raw" hidden></b>
             </span>
             <div>
@@ -253,12 +253,6 @@
               <label>Links Force</label>
               <div class="threshold"><input id="leftForce-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="leftForce-threshold-value">64</output></div>
               <input id="leftForce-enabled" type="checkbox" checked data-device-control aria-label="Links Force aktiv">
-            </div>
-
-            <div class="sensor-row muted">
-              <label>Links 2D TMR <small>in Vorbereitung</small></label>
-              <div class="threshold"><input id="leftTmr2d-threshold" type="range" min="0" max="127" value="64" disabled><output id="leftTmr2d-threshold-value">64</output></div>
-              <input id="leftTmr2d-enabled" type="checkbox" disabled aria-label="Links 2D TMR aktiv">
             </div>
 
             <div class="sensor-row">
@@ -341,16 +335,16 @@
       "imports": {
         "three": "./js/vendor/three.module.min.js",
         "three/addons/": "./js/vendor/addons/",
-        "./js/app.js": "./js/app.js?v=14",
-        "./js/bluetooth.js": "./js/bluetooth.js?v=14",
-        "./js/charts.js": "./js/charts.js?v=14",
-        "./js/model3d.js": "./js/model3d.js?v=14",
-        "./js/protocol.js": "./js/protocol.js?v=14",
-        "./js/webhid.js": "./js/webhid.js?v=14"
+        "./js/app.js": "./js/app.js?v=15",
+        "./js/bluetooth.js": "./js/bluetooth.js?v=15",
+        "./js/charts.js": "./js/charts.js?v=15",
+        "./js/model3d.js": "./js/model3d.js?v=15",
+        "./js/protocol.js": "./js/protocol.js?v=15",
+        "./js/webhid.js": "./js/webhid.js?v=15"
       }
     }
   </script>
-  <script type="module" src="./js/intro.js?v=14"></script>
-  <script type="module" src="./js/app.js?v=14"></script>
+  <script type="module" src="./js/intro.js?v=15"></script>
+  <script type="module" src="./js/app.js?v=15"></script>
 </body>
 </html>

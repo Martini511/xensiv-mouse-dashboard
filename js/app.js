@@ -363,7 +363,7 @@ function panelTitle(panel) {
 function buildPressBars() {
   const list = byId("press-list");
 
-  LIVE_SENSORS.forEach((key) => {
+  SHOWN_SENSORS.forEach((key) => {
     const item = document.createElement("div");
     item.className = "press-item";
 
@@ -390,8 +390,11 @@ function buildPressBars() {
   });
 }
 
-// 2D TMR ist noch in Vorbereitung und liefert keine Messwerte.
-const LIVE_SENSORS = SENSOR_KEYS.filter((key) => key !== "leftTmr2d");
+// Der 2D-TMR-Sensor ist noch in Vorbereitung und hat auf der Seite weder
+// Zeile noch Balken. Im Protokoll bleibt sein Platz aber bestehen – die Maus
+// erwartet fünf Bytes. Überall dort, wo Bedienelemente im Spiel sind, gilt
+// deshalb diese Liste, nicht SENSOR_KEYS.
+const SHOWN_SENSORS = SENSOR_KEYS.filter((key) => key !== "leftTmr2d");
 
 // Je Taste misst genau ein Sensor. Welcher das ist, entscheidet allein die
 // Freigabe in der Konfiguration – und die stammt aus dem Gerät. Die
@@ -440,13 +443,13 @@ function sideOf(key) {
 }
 
 // Zeigt der Betrachter auf eine Sensorzeile, holt das Modell diesen Sensor
-// heran und nennt seine Typenbezeichnung. Der Force-Sensor trägt keine.
+// heran und nennt seine Typenbezeichnung.
 const SENSOR_NAMES = {
   hall: "TLI49901 / TLI55910",
-  force: "No Name",
+  force: "TLI49012",
 };
 
-LIVE_SENSORS.forEach((key) => {
+SHOWN_SENSORS.forEach((key) => {
   const row = byId(`${key}-enabled`).closest(".sensor-row");
   if (!row) return;
 
@@ -456,7 +459,7 @@ LIVE_SENSORS.forEach((key) => {
   row.addEventListener("pointerleave", () => configModel?.clearFocus());
 });
 
-SENSOR_KEYS.forEach((key) => {
+SHOWN_SENSORS.forEach((key) => {
   byId(`${key}-enabled`).addEventListener("change", () => {
     keepSingleSensor(key);
     showActiveSensors();
@@ -472,7 +475,7 @@ function keepSingleSensor(key) {
 
   const side = key.startsWith("left") ? "left" : "right";
 
-  SENSOR_KEYS.forEach((other) => {
+  SHOWN_SENSORS.forEach((other) => {
     if (other === key || !other.startsWith(side)) return;
     byId(`${other}-enabled`).checked = false;
   });
@@ -481,14 +484,14 @@ function keepSingleSensor(key) {
 function showPressure(values) {
   // Skala zuerst nachziehen, sonst bezögen sich die Balken eines
   // Durchlaufs auf zwei verschiedene Bezugsgrößen.
-  pressScale = Math.max(pressScale, ...LIVE_SENSORS.map((key) => values[key]));
+  pressScale = Math.max(pressScale, ...SHOWN_SENSORS.map((key) => values[key]));
 
   const active = {
     left: activeSensor("left"),
     right: activeSensor("right"),
   };
 
-  LIVE_SENSORS.forEach((key) => {
+  SHOWN_SENSORS.forEach((key) => {
     const bar = pressBars.get(key);
     const pressure = values[key];
     const threshold = thresholdOf(key);
@@ -780,15 +783,24 @@ function checkButtonConfig(config) {
   return problems;
 }
 
+// Was die Maus zuletzt geantwortet hat. Gebraucht wird davon nur, was die
+// Seite nicht anzeigt: Beim Schreiben soll der Platz des TMR-Sensors
+// unverändert zurückgehen, statt genullt zu werden.
+let lastRead = null;
+
 function readButtonConfig() {
-  return Object.fromEntries(SENSOR_KEYS.map((key) => [key, {
-    enabled: byId(`${key}-enabled`).checked,
-    threshold: thresholdOf(key),
-  }]));
+  return Object.fromEntries(SENSOR_KEYS.map((key) => [key, shownAsRow(key)
+    ? { enabled: byId(`${key}-enabled`).checked, threshold: thresholdOf(key) }
+    : lastRead?.[key] || { enabled: false, threshold: 0 }]));
+}
+
+function shownAsRow(key) {
+  return SHOWN_SENSORS.includes(key);
 }
 
 function populateButtonConfig(config) {
   configFromDevice = true;
+  lastRead = config;
 
   // Die Antwort im Klartext daneben: Ein Byte je Sensor, oberstes Bit für die
   // Freigabe. Aus enabled und threshold lässt es sich unverfälscht
@@ -803,9 +815,8 @@ function populateButtonConfig(config) {
   const reported = SENSOR_KEYS.some((key) => config[key].enabled);
   const known = reported ? config : writtenConfig;
 
-  SENSOR_KEYS.forEach((key) => {
-    const box = byId(`${key}-enabled`);
-    if (known) box.checked = known[key].enabled;
+  SHOWN_SENSORS.forEach((key) => {
+    if (known) byId(`${key}-enabled`).checked = known[key].enabled;
 
     byId(`${key}-threshold`).value = config[key].threshold;
     byId(`${key}-threshold-value`).textContent = config[key].threshold;
@@ -834,7 +845,7 @@ function showRawAnswer(config) {
 // wie im Desktop-Werkzeug: Es misst die Force-Sensorik.
 function assumeForce() {
   ["left", "right"].forEach((side) => {
-    const enabled = SENSOR_KEYS
+    const enabled = SHOWN_SENSORS
       .filter((key) => key.startsWith(side))
       .some((key) => byId(`${key}-enabled`).checked);
 
