@@ -777,8 +777,21 @@ function readButtonConfig() {
 function populateButtonConfig(config) {
   configFromDevice = true;
 
+  // Die Antwort im Klartext daneben: Ein Byte je Sensor, oberstes Bit für die
+  // Freigabe. Aus enabled und threshold lässt es sich unverfälscht
+  // zurückrechnen - so ist nachprüfbar, was das Gerät wirklich schickt.
+  showRawAnswer(config);
+
+  // Manche Firmwarestände geben die Freigabe beim Lesen nicht zurück; dann
+  // steht in keinem Byte das oberste Bit. Die Schwellwerte stimmen trotzdem.
+  // In dem Fall bleibt die bisherige Auswahl stehen: Wer eben Hall in die
+  // Maus geschrieben hat, soll beim Laden nicht wieder Force vorfinden.
+  const reported = SENSOR_KEYS.some((key) => config[key].enabled);
+
   SENSOR_KEYS.forEach((key) => {
-    byId(`${key}-enabled`).checked = config[key].enabled;
+    const box = byId(`${key}-enabled`);
+    if (reported) box.checked = config[key].enabled;
+
     byId(`${key}-threshold`).value = config[key].threshold;
     byId(`${key}-threshold-value`).textContent = config[key].threshold;
 
@@ -790,11 +803,20 @@ function populateButtonConfig(config) {
   showActiveSensors();
 }
 
-// Die Maus meldet beim Lesen nur die Schwellwerte zurück; das oberste Bit,
-// das den Sensor freigibt, bleibt in ihrer Antwort leer. Ohne Zutun stünde
-// danach jede Taste ohne Sensor da – ein Zustand, in dem sie gar nicht
-// auslösen würde und den die Maus offensichtlich nicht hat. Es gilt deshalb
-// dieselbe Annahme wie im Desktop-Werkzeug: Dann misst die Force-Sensorik.
+function showRawAnswer(config) {
+  const bytes = SENSOR_KEYS.map((key) => {
+    const raw = (config[key].enabled ? 0x80 : 0) | config[key].threshold;
+    return raw.toString(16).padStart(2, "0").toUpperCase();
+  });
+
+  const element = byId("button-raw");
+  element.textContent = `· ANTWORT ${bytes.join(" ")}`;
+  element.hidden = false;
+}
+
+// Ist auf einer Seite gar nichts freigegeben, wäre die Taste tot - ein
+// Zustand, den die Maus offensichtlich nicht hat. Dann gilt dieselbe Annahme
+// wie im Desktop-Werkzeug: Es misst die Force-Sensorik.
 function assumeForce() {
   ["left", "right"].forEach((side) => {
     const enabled = SENSOR_KEYS

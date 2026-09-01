@@ -444,6 +444,11 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 
 /* ─── Tastensensorik ─────────────────────────────── */
 
+/* Die Rohantwort steht neben der Überschrift der Sensorliste – zurückhaltend,
+   aber nachprüfbar: Kein Byte über 7F heisst, dass die Maus keine Freigabe
+   zurückmeldet. */
+.raw-answer { color: var(--muted); font-weight: 500; letter-spacing: .06em; }
+
 .sensor-list { border: 1px solid var(--line); border-top: 0; }
 .sensor-row { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr 50px; align-items: center; gap: 20px; min-height: 66px; padding: 0 20px; border-top: 1px solid var(--line); }
 .sensor-row label { font-weight: 700; }

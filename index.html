@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=12">
+  <link rel="stylesheet" href="./style.css?v=13">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -235,7 +235,9 @@
         </summary>
         <div class="accordion-body">
           <div class="toolbar">
-            <span class="control-title">F&Uuml;NF SENSOREN &middot; SCHWELLWERT 0 &ndash; 127</span>
+            <span class="control-title">F&Uuml;NF SENSOREN &middot; SCHWELLWERT 0 &ndash; 127
+              <b class="raw-answer" id="button-raw" hidden></b>
+            </span>
             <div>
               <button id="load-buttons" class="text-button" data-device-control>Laden</button>
               <button id="save-buttons" class="secondary-button" data-device-control>In die Maus schreiben</button>
@@ -284,11 +286,11 @@
           aus, auch nach dem Schlie&szlig;en dieser Seite. Die Freigabe entscheidet
           zugleich, welchem Sensor die Live-&Uuml;berwachung je Taste folgt; sie
           zeigt die erreichbaren Werte.</p>
-          <p class="hint">Beim Lesen meldet die Maus nur die Schwellwerte
-          zur&uuml;ck, nicht die Freigabe. Nach dem Laden steht deshalb Force,
-          solange nichts anderes bekannt ist &ndash; genau wie im
-          Desktop-Werkzeug. Beim Schreiben geht die Freigabe vollst&auml;ndig
-          ins Ger&auml;t.</p>        </div>
+          <p class="hint">Meldet die Maus beim Lesen keine einzige Freigabe
+          zur&uuml;ck &ndash; erkennbar an einer Antwort, in der kein Byte &uuml;ber
+          127 liegt &ndash;, bleibt die bisherige Auswahl stehen, statt sie zu
+          verwerfen. Die Schwellwerte kommen in diesem Fall trotzdem aus dem
+          Ger&auml;t. Beim Schreiben geht die Freigabe vollst&auml;ndig hin.</p>        </div>
       </details>
 
       <details class="accordion" name="config" data-view="wheel">
@@ -338,16 +340,16 @@
       "imports": {
         "three": "./js/vendor/three.module.min.js",
         "three/addons/": "./js/vendor/addons/",
-        "./js/app.js": "./js/app.js?v=12",
-        "./js/bluetooth.js": "./js/bluetooth.js?v=12",
-        "./js/charts.js": "./js/charts.js?v=12",
-        "./js/model3d.js": "./js/model3d.js?v=12",
-        "./js/protocol.js": "./js/protocol.js?v=12",
-        "./js/webhid.js": "./js/webhid.js?v=12"
+        "./js/app.js": "./js/app.js?v=13",
+        "./js/bluetooth.js": "./js/bluetooth.js?v=13",
+        "./js/charts.js": "./js/charts.js?v=13",
+        "./js/model3d.js": "./js/model3d.js?v=13",
+        "./js/protocol.js": "./js/protocol.js?v=13",
+        "./js/webhid.js": "./js/webhid.js?v=13"
       }
     }
   </script>
-  <script type="module" src="./js/intro.js?v=12"></script>
-  <script type="module" src="./js/app.js?v=12"></script>
+  <script type="module" src="./js/intro.js?v=13"></script>
+  <script type="module" src="./js/app.js?v=13"></script>
 </body>
 </html>
