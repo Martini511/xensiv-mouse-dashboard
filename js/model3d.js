@@ -23,7 +23,13 @@ const POLAR_LIMITS = [0.25, 1.45];
 
 // Die nackte Platine ist flach: Von schräg oben zeigt sie am meisten von sich
 // und füllt das Bild, statt als Strich darin zu liegen.
+//
+// Welche Seite oben liegt, hängt am eingestellten Sensor: Der Hall-Sensor
+// sitzt auf dem Steg, der Force-Sensor darunter. Die Ansicht dreht sich
+// deshalb mit der Auswahl – sonst zeigte sie die Rückseite dessen, worum es
+// gerade geht.
 const BOARD_HOME = { azimuth: 0.55, polar: 0.62 };
+const BOARD_UNDER = { azimuth: 0.55, polar: Math.PI - 0.62 };
 
 // Beim Blick auf die nackte Platine darf der Betrachter auch darunter
 // schauen. Die Pole bleiben knapp ausgespart - genau senkrecht von oben
@@ -340,8 +346,9 @@ export class MouseModel {
     this.#showSensors();
     this.#showLed();
 
-    this.azimuth = view.home.azimuth;
-    this.polar = view.home.polar;
+    const home = this.#home();
+    this.azimuth = home.azimuth;
+    this.polar = home.polar;
     this.#measure(this.pivot);
     this.#invalidate();
   }
@@ -381,6 +388,19 @@ export class MouseModel {
     this.#showSensors();
   }
 
+  // Die Ruhelage der Sensoransicht folgt der Auswahl: Sie zeigt die Seite der
+  // Platine, auf der die eingestellten Sensoren sitzen. Sind es verschiedene
+  // – links Hall, rechts Force –, bleibt es beim Blick von oben; eine Seite
+  // liesse sich dann ohnehin nicht bevorzugen.
+  #home() {
+    if (this.view !== VIEWS.sensors) return this.view.home;
+
+    const sides = [this.chosen.left, this.chosen.right].filter(Boolean);
+    const underneath = sides.length > 0
+      && sides.every((family) => family === "force");
+    return underneath ? BOARD_UNDER : BOARD_HOME;
+  }
+
   #showSensors() {
     Object.entries(this.sensors).forEach(([key, sensor]) => {
       const [family, side] = key.split(".");
@@ -398,8 +418,7 @@ export class MouseModel {
 
   // Wie weit ist die Seite des Sensors dem Betrachter zugewandt? Je Bild neu,
   // denn die Antwort ändert sich mit jeder Drehung.
-  #faceHalos() {
-    Object.values(this.sensors).forEach((sensor) => {
+  #faceHalos() {    Object.values(this.sensors).forEach((sensor) => {
       if (!sensor.lit) return;
       const facing = this.direction.y * sensor.facing;
       sensor.halo.material.opacity = THREE.MathUtils.smoothstep(facing, ...HALO_FADE);
@@ -579,9 +598,9 @@ export class MouseModel {
     const horizontal = vertical * this.camera.aspect;
 
     if (!this.view.turn) {
+      const home = this.#home();
       this.baseDistance = this.#fitDistance(
-        this.view.home.azimuth, this.view.home.polar, horizontal, vertical)
-        * FIT_MARGIN;
+        home.azimuth, home.polar, horizontal, vertical) * FIT_MARGIN;
       if (!this.focus) this.distance = this.baseDistance;
       return;
     }
@@ -651,7 +670,7 @@ export class MouseModel {
       moving = moving || Math.abs(swing) > 1e-3
         || Math.abs(this.focus.polar - this.polar) > 1e-3;
     } else if (idle > RETURN_DELAY) {
-      const home = this.view.home;
+      const home = this.#home();
       const azimuth = shortestAngle(this.azimuth, home.azimuth);
       this.azimuth += azimuth * RETURN_EASE;
       this.polar += (home.polar - this.polar) * RETURN_EASE;
