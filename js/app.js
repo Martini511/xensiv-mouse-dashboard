@@ -49,6 +49,12 @@ const observedMax = new Map();
 // Ob die angezeigte Tastenkonfiguration tatsächlich vom Gerät stammt.
 let configFromDevice = false;
 
+// Was zuletzt in die Maus geschrieben wurde. Die Firmware gibt die Freigabe
+// beim Lesen nicht zurück - nur die Schwellwerte. Diese Notiz ist dann die
+// einzige Auskunft darüber, welcher Sensor im Gerät misst, und tritt beim
+// Laden an die Stelle der fehlenden Antwort.
+let writtenConfig = null;
+
 const pressBars = new Map();
 
 // ─── Reiter ───────────────────────────────────────────
@@ -161,6 +167,7 @@ mouse.addEventListener("disconnected", () => {
   // Die Beobachtungen gelten nur für die abgelaufene Sitzung.
   observedMax.clear();
   configFromDevice = false;
+  writtenConfig = null;
   wheelPressTrigger = 0;
 
   previewLed(byId("led-color").value);
@@ -719,7 +726,13 @@ byId("save-buttons").addEventListener("click", () => {
   const config = readButtonConfig();
   if (!confirmButtonConfig(config)) return;
 
-  run(() => mouse.writeButtonConfig(config), "Tasteneinstellungen gespeichert");
+  run(async () => {
+    await mouse.writeButtonConfig(config);
+    // Ab jetzt steht das im Gerät. Beim Lesen erfährt man es nicht wieder,
+    // deshalb diese Notiz - sie ist die einzige Auskunft darüber, welcher
+    // Sensor dort tatsächlich misst.
+    writtenConfig = config;
+  }, "Tasteneinstellungen gespeichert");
 });
 
 // Eine zu hohe Schwelle oder ein abgeschalteter Sensor macht die Taste
@@ -784,13 +797,15 @@ function populateButtonConfig(config) {
 
   // Manche Firmwarestände geben die Freigabe beim Lesen nicht zurück; dann
   // steht in keinem Byte das oberste Bit. Die Schwellwerte stimmen trotzdem.
-  // In dem Fall bleibt die bisherige Auswahl stehen: Wer eben Hall in die
-  // Maus geschrieben hat, soll beim Laden nicht wieder Force vorfinden.
+  // An die Stelle der fehlenden Antwort tritt dann, was zuletzt geschrieben
+  // wurde – so holt „Laden“ den Stand des Geräts zurück und verwirft
+  // ungespeicherte Änderungen, statt sie einfach stehen zu lassen.
   const reported = SENSOR_KEYS.some((key) => config[key].enabled);
+  const known = reported ? config : writtenConfig;
 
   SENSOR_KEYS.forEach((key) => {
     const box = byId(`${key}-enabled`);
-    if (reported) box.checked = config[key].enabled;
+    if (known) box.checked = known[key].enabled;
 
     byId(`${key}-threshold`).value = config[key].threshold;
     byId(`${key}-threshold-value`).textContent = config[key].threshold;
