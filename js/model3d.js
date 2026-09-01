@@ -112,6 +112,13 @@ const PRESS_GLOW = 0.35;
 const SENSOR_GLOW = 1.6;
 const SENSOR_HALO = 0.028;                               // m
 
+// Wie heiß der Kern des Lichtflecks ist. Über der hellen Platine würde ein
+// voller Kern ins Weiße laufen und den Sensor verschlucken, den er zeigen
+// soll - dort ist Zurückhaltung geboten. Das Fenster in der dunklen
+// Unterseite hat dieses Problem nicht: Es soll leuchten, nicht andeuten.
+const HALO_CORE = 0.42;
+const DPI_CORE = 1.0;
+
 // Der Lichthof scheint durch die Platine hindurch. Der Tiefenpuffer bliebe
 // zwar der ehrlichere Weg, gibt aber ein hässliches Bild: Vom Schein kämen
 // nur die Teile durch, die zufällig auf die Schlitze neben den Stegen
@@ -164,9 +171,9 @@ const LED_LIGHT = 1.6;
 // etwas Rot auf die Kanten der Öffnung, damit der Schein nicht wie ein
 // aufgeklebter Fleck wirkt.
 const DPI_COLOR = 0xff2a18;
-const DPI_LIGHT = [0.02, 0.30];                          // dunkelster, hellster
-const DPI_HALO = [0.010, 0.032];                         // m, Durchmesser
-const DPI_HALO_FADE = [0.25, 1.0];                       // Deckkraft
+const DPI_LIGHT = [0.06, 1.5];                           // dunkelster, hellster
+const DPI_HALO = [0.012, 0.046];                         // m, Durchmesser
+const DPI_HALO_FADE = [0.3, 1.0];                        // Deckkraft
 const DPI_HALO_OUT = 0.004;                              // m, vor dem Fenster
 
 // Das Rad dreht sich bei der Kalibrierung von selbst weiter - so ist auf
@@ -368,7 +375,7 @@ export class MouseModel {
         // Der Schein gehört vor das Fenster, nicht dahinter. Die Lampe steht
         // im Gehäuse, wo sie hingehört; der Lichthof rückt nach außen, sonst
         // läge er hinter dem Boden, durch den er dringen soll.
-        this.dpiHalo = this.#addHalo(this.dpiLight.position);
+        this.dpiHalo = this.#addHalo(this.dpiLight.position, DPI_CORE);
         this.dpiHalo.position.y -= DPI_HALO_OUT;
         this.dpiHalo.material.color.setHex(DPI_COLOR);
       }
@@ -581,10 +588,13 @@ export class MouseModel {
   // Er verdeckt nichts, denn er wird addiert statt darübergemalt, und er
   // fragt nicht nach der Tiefe: So bleibt er ein Kreis, auch wenn zwischen
   // ihm und dem Auge die Platine steht.
-  #addHalo(position) {
-    this.haloTexture = this.haloTexture || makeHalo();
+  #addHalo(position, core = HALO_CORE) {
+    this.haloTextures = this.haloTextures || new Map();
+    if (!this.haloTextures.has(core)) {
+      this.haloTextures.set(core, makeHalo(core));
+    }
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: this.haloTexture,
+      map: this.haloTextures.get(core),
       color: PRESS_COLOR,
       transparent: true,
       depthWrite: false,
@@ -947,11 +957,11 @@ function centreOf(mesh, out) {
     .applyMatrix4(mesh.matrixWorld);
 }
 
-// Weicher Lichtfleck, in der Mitte hell und nach außen auslaufend. Der Kern
-// bleibt bewusst gedämpft: Der Schein wird addiert, und über der ohnehin
-// hellen Platine liefe er sonst ins Weiße aus – der Sensor verschwände in
-// dem Fleck, der ihn zeigen soll.
-function makeHalo() {
+// Weicher Lichtfleck, in der Mitte hell und nach außen auslaufend. Wie hell
+// der Kern sein darf, hängt am Untergrund: Der Schein wird addiert, und über
+// der hellen Platine liefe ein voller Kern ins Weiße aus. Die Abstufung nach
+// außen bleibt in jedem Fall dieselbe.
+function makeHalo(core) {
   const size = 64;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -960,9 +970,9 @@ function makeHalo() {
   const context = canvas.getContext("2d");
   const glow = context.createRadialGradient(
     size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  glow.addColorStop(0, "rgba(255, 255, 255, .42)");
-  glow.addColorStop(.25, "rgba(255, 255, 255, .26)");
-  glow.addColorStop(.6, "rgba(255, 255, 255, .08)");
+  glow.addColorStop(0, `rgba(255, 255, 255, ${core})`);
+  glow.addColorStop(.25, `rgba(255, 255, 255, ${core * 0.62})`);
+  glow.addColorStop(.6, `rgba(255, 255, 255, ${core * 0.19})`);
   glow.addColorStop(1, "rgba(255, 255, 255, 0)");
   context.fillStyle = glow;
   context.fillRect(0, 0, size, size);
