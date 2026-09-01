@@ -294,9 +294,14 @@ export class MouseModel {
       if (name.startsWith(SENSOR)) {
         // Der Name nennt die Familie, die Lage die Seite – letzteres nach
         // derselben Regel wie bei den Tasten, damit beides zusammenpasst.
+        // Der Radsensor sitzt auf der Mittellinie und hat keine Seite.
         centreOf(object, place);
-        const side = (place.x >= 0) === LEFT_IS_POSITIVE_X ? "left" : "right";
-        const family = name.includes("hall") ? "hall" : "force";
+        const family = name.includes("hall") ? "hall"
+          : name.includes("force") ? "force"
+            : "wheel";
+        const side = family === "wheel" ? "centre"
+          : (place.x >= 0) === LEFT_IS_POSITIVE_X ? "left" : "right";
+
         this.sensors[`${family}.${side}`] = {
           material: object.material,
           rest: object.material.color.clone(),
@@ -304,7 +309,9 @@ export class MouseModel {
           hidden: this.#addEdges(object),
           position: place.clone(),
           // Der Hall-Sensor sitzt oben auf dem Steg, der Force-Sensor unten.
-          facing: family === "hall" ? 1 : -1,
+          // Der Radsensor liegt zwar oben, aber unter dem Achshalter: Ihm ist
+          // keine Seite zugewandt, seine Strichlinie gilt darum immer.
+          facing: family === "hall" ? 1 : family === "force" ? -1 : 0,
           lit: false,
         };
       }
@@ -403,8 +410,12 @@ export class MouseModel {
     Object.entries(this.sensors).forEach(([key, sensor]) => {
       const [family, side] = key.split(".");
       const aimed = this.focus?.key === key;
-      const on = this.view === VIEWS.sensors
-        && (aimed || this.chosen[side] === family);
+      // Der Radsensor gehoert zur Radkalibrierung und wird dort nicht
+      // gewaehlt: Es gibt nur diesen einen, und er misst immer.
+      const on = family === "wheel"
+        ? this.view === VIEWS.wheel
+        : this.view === VIEWS.sensors
+          && (aimed || this.chosen[side] === family);
 
       tint(sensor.material, sensor.rest, on, SENSOR_GLOW);
       sensor.lit = on;
