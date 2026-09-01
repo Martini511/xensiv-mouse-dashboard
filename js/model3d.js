@@ -51,6 +51,16 @@ const RETURN_EASE = 0.055;
 // dahinter – seine linke Taste liegt damit auf der +X-Seite des Modells.
 const LEFT_IS_POSITIVE_X = true;
 
+// Ohne Gehäuse steht die Platine frei im Raum, und ihre grauen Quader laufen
+// dort ineinander – gleiche Farbe, gleiche Rauheit, nur die Schattierung
+// trennt sie. Eine Linie an jeder scharfen Kante gibt ihnen ihre Form
+// zurück, wie in einer technischen Zeichnung. Der Schwellwinkel hält die
+// Rundungen frei: Ein Zylinder soll seine Silhouette zeigen, nicht jede
+// einzelne Facette seiner Tesselierung.
+const EDGE_ANGLE = 30;                                   // Grad
+const EDGE_COLOR = 0x06181a;
+const EDGE_OPACITY = 0.55;
+
 // Gedrückt wird die Taste eingefärbt, nicht nur aufgehellt: Auf dem hellen
 // Deckel ginge ein reiner Leuchtanteil im Glanzlicht unter. Die Farbe ist
 // dieselbe, die auch die Zeichnung benutzt.
@@ -132,6 +142,7 @@ export class MouseModel {
     this.visible = true;
     this.view = VIEWS.live;
     this.shell = [];
+    this.edges = [];
     this.sensors = {};
     this.chosen = {};
     this.focus = null;
@@ -253,7 +264,14 @@ export class MouseModel {
         this.restWheel.push(object.material.color.clone());
       }
       if (name.includes(COVER)) this.#prepareCover(object);
-      if (name.includes(COVER) || name.includes(BODY)) this.shell.push(object);
+      if (name.includes(COVER) || name.includes(BODY)) {
+        this.shell.push(object);
+      } else {
+        // Die Schalen bleiben aussen vor: Sie sind gerade dann unsichtbar,
+        // wenn die Kanten gezeigt werden, und stellen mit Abstand die
+        // meisten Dreiecke - das Ableiten ihrer Kanten waere umsonst.
+        this.#addEdges(object);
+      }
       if (name === LED) {
         // Der Körper dient nur als Ortsangabe: Er verrät, wo auf der Platine
         // die LED sitzt, und tritt danach ab.
@@ -286,8 +304,7 @@ export class MouseModel {
   // Äußere Punkte und Mittelpunkt des Sichtbaren. Beides hängt zusammen: Ohne
   // Gehäuse liegt die Platine nicht mehr in der Mitte der Baugruppe, und eine
   // Kamera, die weiter auf den Ursprung zielt, schöbe sie an den Bildrand.
-  #measure(root) {
-    const points = extremePoints(root);
+  #measure(root) {    const points = extremePoints(root);
     const box = new THREE.Box3();
     points.forEach((point) => box.expandByPoint(point));
     box.getCenter(this.baseTarget);
@@ -309,6 +326,11 @@ export class MouseModel {
     this.clearFocus();
 
     this.shell.forEach((part) => { part.visible = view.shell; });
+
+    // Gezeigt werden die Kanten genau dann, wenn das Gehäuse fehlt: Am
+    // vollständigen Gerät sind die Bauteile ohnehin verdeckt.
+    this.edges.forEach((line) => { line.visible = !view.shell; });
+
     this.wheelMaterials.forEach((material, index) => {
       tint(material, this.restWheel[index], view.spin);
     });
@@ -373,8 +395,7 @@ export class MouseModel {
   // Der Lichthof liegt als Schild im Raum und dreht sich mit dem Blick mit.
   // Er verdeckt nichts: Er wird addiert, nicht darübergemalt, und hält sich
   // aus dem Tiefenpuffer heraus - hinter der Platine bleibt er verdeckt.
-  #addHalo(position) {
-    this.haloTexture = this.haloTexture || makeHalo();
+  #addHalo(position) {    this.haloTexture = this.haloTexture || makeHalo();
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({
       map: this.haloTexture,
       color: PRESS_COLOR,
@@ -387,6 +408,29 @@ export class MouseModel {
     halo.visible = false;
     this.pivot.add(halo);
     return halo;
+  }
+
+  // Die Kanten hängen als Kind am Bauteil: So machen sie jede Bewegung mit,
+  // auch die des Rads, ohne dass jemand ihre Lage nachführen müsste. Die
+  // Fläche selbst rückt dabei ein Stück nach hinten – sonst läge die Linie
+  // genau auf ihr und der Tiefenpuffer könnte sich nicht entscheiden.
+  #addEdges(mesh) {
+    const material = mesh.material;
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = 1;
+    material.polygonOffsetUnits = 1;
+
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(mesh.geometry, EDGE_ANGLE),
+      new THREE.LineBasicMaterial({
+        color: EDGE_COLOR,
+        transparent: true,
+        opacity: EDGE_OPACITY,
+      }));
+
+    edges.visible = false;
+    mesh.add(edges);
+    this.edges.push(edges);
   }
 
   // Der Deckel ist ein einziges Bauteil; die Tasten sind darin nur durch den
