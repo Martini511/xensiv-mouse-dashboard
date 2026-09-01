@@ -5,6 +5,8 @@
 // an dieser Datei ändern das Verhalten auf dem Gerät – nicht nur die
 // Anzeige.
 
+import { t } from "./i18n.js";
+
 export const SENSOR_KEYS = [
   "leftForce",
   "leftTmr2d",
@@ -13,13 +15,11 @@ export const SENSOR_KEYS = [
   "rightHall",
 ];
 
-export const SENSOR_LABELS = Object.freeze({
-  leftForce: "Links Force",
-  leftTmr2d: "Links 2D TMR",
-  leftHall: "Links Hall",
-  rightForce: "Rechts Force",
-  rightHall: "Rechts Hall",
-});
+// Die Beschriftung hängt an der Sprache und wird deshalb erfragt, nicht
+// abgelegt: Eine Tabelle müsste beim Umschalten neu gebaut werden.
+export function sensorLabel(key) {
+  return t(`sensor.${key}`);
+}
 
 export function encodeDpi(dpi) {
   const data = new ArrayBuffer(2);
@@ -37,7 +37,7 @@ export function encodeButtonConfig(config) {
 }
 
 export function decodeButtonConfig(value) {
-  requireLength(value, 5, "Tastenkonfiguration");
+  requireLength(value, 5, t("acc.buttons.title"));
   return Object.fromEntries(SENSOR_KEYS.map((key, index) => [key, {
     enabled: Boolean(value.getUint8(index) & 0x80),
     threshold: value.getUint8(index) & 0x7f,
@@ -45,7 +45,7 @@ export function decodeButtonConfig(value) {
 }
 
 export function decodeButtonPressure(value) {
-  requireLength(value, 5, "Tastendruck");
+  requireLength(value, 5, t("live.press"));
   return Object.fromEntries(SENSOR_KEYS.map((key, index) => [
     key,
     value.getUint8(index) & 0x7f,
@@ -53,7 +53,7 @@ export function decodeButtonPressure(value) {
 }
 
 export function decodeWheelValues(value) {
-  requireLength(value, 12, "Radwerte");
+  requireLength(value, 12, t("metric.wheelPress"));
   return {
     rawX: value.getInt16(0, true),
     rawZ: value.getInt16(2, true),
@@ -65,7 +65,7 @@ export function decodeWheelValues(value) {
 }
 
 export function decodeCalibration(value) {
-  requireLength(value, 14, "Radkalibrierung");
+  requireLength(value, 14, t("acc.wheel.title"));
   return {
     offsetX: value.getInt16(0, true),
     offsetZ: value.getInt16(2, true),
@@ -98,7 +98,7 @@ export function encodeCalibrationCommand(command) {
 
 function requireLength(value, expected, label) {
   if (value.byteLength !== expected) {
-    throw new Error(
-      `${label}: ${expected} Byte erwartet, ${value.byteLength} erhalten`);
+    throw new Error(t("error.shortValue",
+      { what: label, actual: value.byteLength, expected }));
   }
 }

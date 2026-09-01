@@ -8,6 +8,7 @@ import {
   encodeCalibrationCommand,
   encodeDpi,
 } from "./protocol.js";
+import { t } from "./i18n.js";
 
 // Dienst- und Charakteristik-UUIDs aus `design.cybt`. Die Zuordnung ist
 // fest verdrahtet: Ein gezieltes `getCharacteristic` ist deutlich
@@ -66,9 +67,7 @@ export class XensivMouseBluetooth extends EventTarget {
 
   async connect() {
     if (!this.available) {
-      throw new Error(
-        "Web Bluetooth steht nicht zur Verfügung. Bitte Chrome oder Edge " +
-        "über HTTPS beziehungsweise localhost verwenden.");
+      throw new Error(t("error.noBluetooth"));
     }
 
     const device = await navigator.bluetooth.requestDevice({
@@ -188,7 +187,7 @@ export class XensivMouseBluetooth extends EventTarget {
   // Erzwungener Neuaufbau – die Alternative zum Neustart der Maus.
   async reset() {
     const device = this.device || (await this.knownDevices())[0];
-    if (!device) throw new Error("Es ist noch keine Maus freigegeben.");
+    if (!device) throw new Error(t("error.noneReleased"));
 
     this.userDisconnect = true;
     this.stopReconnect();
@@ -219,7 +218,7 @@ export class XensivMouseBluetooth extends EventTarget {
     if (this.device?.gatt?.connected) return;
 
     this.dispatchEvent(new CustomEvent("notice", {
-      detail: { message: "Verbindung ohne Ereignis verloren" },
+      detail: { message: t("error.lostSilently") },
     }));
     this.handleDisconnect();
   }
@@ -350,7 +349,7 @@ export class XensivMouseBluetooth extends EventTarget {
   }
 
   requireConnected() {
-    if (!this.connected) throw new Error("Die Maus ist nicht verbunden");
+    if (!this.connected) throw new Error(t("error.notConnected"));
   }
 }
 

@@ -109,6 +109,25 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
 
 .connection-tools { display: flex; align-items: center; gap: 18px; }
 
+/* Die Sprachwahl ist ein Werkzeug der Seite, kein Bedienelement der Maus.
+   Sie tritt deshalb zurueck: die Schrift der Statusanzeigen, kein Rahmen,
+   der um Aufmerksamkeit bittet. */
+.language-select {
+  appearance: none;
+  padding: 5px 24px 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23697174'/%3E%3C/svg%3E")
+    no-repeat right 8px center / 8px 5px;
+  color: inherit;
+  font: 500 11px "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.language-select:hover { border-color: var(--accent); }
+.language-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .connection-label, .battery {
   display: flex;
   align-items: center;

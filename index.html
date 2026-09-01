@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f2f5f5">
-  <title>Infineon | XENSIV&trade; Maus Konfigurator</title>
+  <title>Infineon | XENSIV&trade; Mouse Configurator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=31">
+  <link rel="stylesheet" href="./style.css?v=32">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -23,35 +23,42 @@
     <video id="intro-video" class="intro-source"
            src="./assets/Website_Start_Mouse.mp4"
            muted playsinline preload="auto" aria-hidden="true"></video>
-    <button type="button" class="intro-skip" id="intro-skip">
-      &Uuml;berspringen
+    <button type="button" class="intro-skip" id="intro-skip" data-i18n="intro.skip">
+      Skip
     </button>
   </div>
 
   <header class="app-header">
-    <a class="brand" href="./" aria-label="Infineon XENSIV Maus Konfigurator">
+    <a class="brand" href="./" data-i18n-aria="brand.aria"
+       aria-label="Infineon XENSIV mouse configurator">
       <img class="brand-logo" src="./lowres-Logo_Infineon_RGB.eps.png" alt="Infineon Technologies">
       <span class="brand-text">
-        <strong>XENSIV&trade; Maus</strong>
-        <small>Konfigurationskonsole</small>
+        <strong data-i18n="brand.name">XENSIV&trade; Mouse</strong>
+        <small data-i18n="brand.sub">Configuration console</small>
       </span>
     </a>
     <div class="connection-tools">
       <div id="connection-label" class="connection-label" data-state="offline">
-        <span class="status-dot"></span><span>Nicht verbunden</span>
+        <span class="status-dot"></span><span data-i18n="state.offline">Not connected</span>
       </div>
-      <div class="battery" title="Batteriestand">
+      <div class="battery" data-i18n-title="battery.title" title="Battery level">
         <span class="battery-icon"></span><span id="battery-level">--</span>
       </div>
-      <button id="reset-button" class="text-button" hidden>Neu verbinden</button>
-      <button id="connect-button" class="primary-button"><span>Maus verbinden</span></button>
+      <!-- Die Sprachwahl gehoert zu den Werkzeugen, nicht zu den Einstellungen
+           der Maus: Sie betrifft die Seite, nicht das Geraet, und bleibt
+           deshalb auch ohne Verbindung bedienbar. -->
+      <select id="language" class="language-select"
+              data-i18n-aria="lang.aria" aria-label="Language"></select>
+      <button id="reset-button" class="text-button" hidden
+              data-i18n="header.reconnect">Reconnect</button>
+      <button id="connect-button" class="primary-button"><span data-i18n="header.connect">Connect mouse</span></button>
     </div>
   </header>
 
   <main class="app-shell">
-    <nav class="tabs" aria-label="Ansichten">
-      <button class="active" data-tab="live">Live-&Uuml;berwachung</button>
-      <button data-tab="config">Konfiguration</button>
+    <nav class="tabs" data-i18n-aria="tabs.aria" aria-label="Views">
+      <button class="active" data-tab="live" data-i18n="tabs.live">Live monitoring</button>
+      <button data-tab="config" data-i18n="tabs.config">Configuration</button>
     </nav>
 
     <!-- ═══ Live-Überwachung ═══════════════════════ -->
@@ -59,16 +66,18 @@
       <div class="stage-shell">
 
         <aside class="device-stage">
-          <div class="stage-label"><span>GER&Auml;T 01</span><span id="stage-transport">&ndash;</span></div>
+          <div class="stage-label"><span data-i18n="stage.device">DEVICE 01</span><span id="stage-transport">&ndash;</span></div>
 
           <div class="mouse-stage">
             <!-- Das CAD-Modell übernimmt die Bühne, sobald es geladen ist.
                  Ohne WebGL oder bei einem Ladefehler bleibt die Zeichnung
                  darunter stehen – sie zeigt dieselben Zustände. -->
             <canvas class="mouse-canvas" id="mouse-canvas" hidden
-                    aria-label="Modell der XENSIV Maus"></canvas>
+                    data-i18n-aria="model.aria"
+                    aria-label="Model of the XENSIV mouse"></canvas>
             <svg class="mouse-svg" viewBox="0 0 240 400" role="img"
-                 aria-label="Schematische Darstellung der XENSIV Maus">
+                 data-i18n-aria="svg.aria"
+                 aria-label="Schematic view of the XENSIV mouse">
               <ellipse class="mouse-glow" id="mouse-glow"
                        cx="120" cy="288" rx="86" ry="46"/>
               <path class="mouse-body" d="
@@ -95,13 +104,13 @@
 
           <div class="stage-readout">
             <div class="stage-line">
-              <span>RADWINKEL</span><strong id="stage-wheel">&ndash;</strong>
+              <span data-i18n="stage.wheelAngle">WHEEL ANGLE</span><strong id="stage-wheel">&ndash;</strong>
             </div>
             <div class="stage-line">
-              <span>TASTEN</span><strong id="stage-press">&ndash; / &ndash;</strong>
+              <span data-i18n="stage.buttons">BUTTONS</span><strong id="stage-press">&ndash; / &ndash;</strong>
             </div>
             <div class="stage-line">
-              <span>LED</span>
+              <span data-i18n="stage.led">LED</span>
               <strong id="stage-led"><i class="stage-swatch" id="stage-swatch"></i>#12A190</strong>
             </div>
           </div>
@@ -109,40 +118,41 @@
 
         <section class="stage-main">
           <div class="section-heading">
-            <div><span class="eyebrow">LIVE-TELEMETRIE</span><h1>Sensorwerte</h1></div>
+            <div><span class="eyebrow" data-i18n="live.eyebrow">LIVE TELEMETRY</span><h1 data-i18n="live.heading">Sensor values</h1></div>
             <span class="section-index">01</span>
           </div>
 
           <div class="toolbar">
-            <span class="live-state" id="live-state"><i></i>Nicht verbunden</span>
+            <span class="live-state" id="live-state"><i></i><span id="live-state-text">Not connected</span></span>
             <div class="stream-controls">
-              <span class="rate-actual">erreicht <b id="wheel-actual">&ndash;</b> Hz</span>
-              <button id="clear-charts" class="text-button">Leeren</button>
+              <span class="rate-actual"><span data-i18n="live.rateBefore">reaching</span>
+                <b id="wheel-actual">&ndash;</b> <span data-i18n="live.rateAfter">Hz</span></span>
+              <button id="clear-charts" class="text-button" data-i18n="live.clear">Clear</button>
             </div>
           </div>
 
           <div class="metric-grid">
             <div class="metric-card">
-              <span>WINKEL KALIBRIERT</span><strong id="calibrated-angle">--</strong><small>Grad</small>
+              <span data-i18n="metric.angleCal">ANGLE CALIBRATED</span><strong id="calibrated-angle">--</strong><small data-i18n="metric.degrees">Degrees</small>
             </div>
             <div class="metric-card">
-              <span>WINKEL ROH</span><strong id="raw-angle">--</strong><small>Grad</small>
+              <span data-i18n="metric.angleRaw">ANGLE RAW</span><strong id="raw-angle">--</strong><small data-i18n="metric.degrees">Degrees</small>
             </div>
             <div class="metric-card">
-              <span>FELD X / Z</span><strong id="field-cal">-- / --</strong><small>kalibriert</small>
+              <span data-i18n="metric.field">FIELD X / Z</span><strong id="field-cal">-- / --</strong><small data-i18n="metric.calibrated">calibrated</small>
             </div>
             <div class="metric-card">
-              <span>FELD X / Z</span><strong id="field-raw">-- / --</strong><small>roh</small>
+              <span data-i18n="metric.field">FIELD X / Z</span><strong id="field-raw">-- / --</strong><small data-i18n="metric.raw">raw</small>
             </div>
             <div class="metric-card">
-              <span>RADDRUCK</span><strong id="wheel-press">-- / --</strong><small>Radius / Maximall&auml;nge</small>
+              <span data-i18n="metric.wheelPress">WHEEL PRESSURE</span><strong id="wheel-press">-- / --</strong><small data-i18n="metric.radiusMax">Radius / maximum length</small>
             </div>
           </div>
 
-          <h2 class="subhead">Tastendruck</h2>
+          <h2 class="subhead" data-i18n="live.press">Button pressure</h2>
           <div class="press-list" id="press-list"></div>
 
-          <h2 class="subhead">Verlauf</h2>
+          <h2 class="subhead" data-i18n="live.history">History</h2>
           <div class="chart-grid">
             <canvas id="angle-chart"></canvas>
             <canvas id="field-chart"></canvas>
@@ -158,24 +168,25 @@
         <!-- Das Modell zeigt zu jedem Reiter, woran gerade gedreht wird. -->
         <aside class="device-stage">
           <div class="stage-label">
-            <span>MODELL</span><span id="config-view">BELEUCHTUNG</span>
+            <span data-i18n="stage.model">MODEL</span><span id="config-view">LIGHTING</span>
           </div>
 
           <div class="mouse-stage">
             <canvas class="mouse-canvas" id="config-canvas"
-                    aria-label="Modell der XENSIV Maus"></canvas>
+                    data-i18n-aria="model.aria"
+                    aria-label="Model of the XENSIV mouse"></canvas>
           </div>
 
           <div class="stage-readout">
             <div class="stage-line">
-              <span>ANSICHT</span><strong id="config-caption">Gesamtes Ger&auml;t</strong>
+              <span data-i18n="stage.view">VIEW</span><strong id="config-caption">Whole device</strong>
             </div>
           </div>
         </aside>
 
         <section class="stage-main">
           <div class="section-heading">
-            <div><span class="eyebrow">KONFIGURATION</span><h1>Einstellungen der Maus</h1></div>
+            <div><span class="eyebrow" data-i18n="config.eyebrow">CONFIGURATION</span><h1 data-i18n="config.heading">Mouse settings</h1></div>
             <span class="section-index">02</span>
           </div>
 
@@ -184,7 +195,7 @@
           <details class="accordion" name="config" data-view="light" open>
         <summary>
           <span class="accordion-index">01</span>
-          <span class="accordion-title">Beleuchtung<small>Farbe der Deckenbeleuchtung</small></span>
+          <span class="accordion-title"><span data-i18n="acc.light.title">Lighting</span><small data-i18n="acc.light.sub">Colour of the top lighting</small></span>
         </summary>
         <div class="accordion-body">
           <div class="control-grid two-columns">
@@ -193,21 +204,21 @@
                 <span id="led-swatch"></span><strong id="led-value">#12A190</strong>
               </div>
               <label class="color-picker-label">
-                Farbe w&auml;hlen
+                <span data-i18n="led.pick">Choose colour</span>
                 <input id="led-color" type="color" value="#12a190" data-device-control>
               </label>
-              <button id="apply-led" class="secondary-button" data-device-control>&Uuml;bernehmen</button>
+              <button id="apply-led" class="secondary-button" data-device-control data-i18n="led.apply">Apply</button>
             </section>
 
             <section class="control-block">
-              <span class="control-title">SCHNELLFARBEN</span>
+              <span class="control-title" data-i18n="led.quick">QUICK COLOURS</span>
               <div class="swatch-row">
-                <button class="color-swatch red" data-color="#ff0000" data-device-control aria-label="Rot"></button>
-                <button class="color-swatch green" data-color="#00ff00" data-device-control aria-label="Gr&uuml;n"></button>
-                <button class="color-swatch blue" data-color="#0000ff" data-device-control aria-label="Blau"></button>
-                <button class="color-swatch off" data-color="#000000" data-device-control aria-label="Aus"></button>
+                <button class="color-swatch red" data-color="#ff0000" data-device-control data-i18n-aria="color.red" aria-label="Red"></button>
+                <button class="color-swatch green" data-color="#00ff00" data-device-control data-i18n-aria="color.green" aria-label="Green"></button>
+                <button class="color-swatch blue" data-color="#0000ff" data-device-control data-i18n-aria="color.blue" aria-label="Blue"></button>
+                <button class="color-swatch off" data-color="#000000" data-device-control data-i18n-aria="color.off" aria-label="Off"></button>
               </div>
-              <button id="motion-led" class="text-button" data-device-control>Bewegungslicht einschalten</button>
+              <button id="motion-led" class="text-button" data-device-control data-i18n="led.motion">Switch on motion light</button>
             </section>
           </div>
         </div>
@@ -216,7 +227,7 @@
       <details class="accordion" name="config" data-view="pointer">
         <summary>
           <span class="accordion-index">02</span>
-          <span class="accordion-title">Zeigeraufl&ouml;sung<small>Abtastrate des optischen Sensors</small></span>
+          <span class="accordion-title"><span data-i18n="acc.dpi.title">Pointer resolution</span><small data-i18n="acc.dpi.sub">Sampling rate of the optical sensor</small></span>
         </summary>
         <div class="accordion-body">
           <section class="control-block dpi-control">
@@ -224,99 +235,99 @@
             <input id="dpi" type="range" min="400" max="3200" step="100" value="800" data-device-control>
             <div class="range-labels"><span>400</span><span>3200</span></div>
           </section>
-          <p class="hint">Der Wert wird als 16-Bit-Ganzzahl im Little-Endian-Format &uuml;bertragen.
-          Das Modell zeigt die Unterseite: Im Fenster des optischen Sensors
-          steht ein Licht, das mit der eingestellten Aufl&ouml;sung heller wird.</p>
+          <p class="hint" data-i18n="dpi.hint">The value is transmitted as a
+          16-bit integer in little-endian format. The model shows the
+          underside: a light sits in the window of the optical sensor and grows
+          brighter with the resolution set.</p>
         </div>
       </details>
 
       <details class="accordion" name="config" data-view="sensors">
         <summary>
           <span class="accordion-index">03</span>
-          <span class="accordion-title">Tastensensorik<small>Freigabe und Schwellwerte</small></span>
+          <span class="accordion-title"><span data-i18n="acc.buttons.title">Button sensors</span><small data-i18n="acc.buttons.sub">Enable and thresholds</small></span>
         </summary>
         <div class="accordion-body">
           <div class="toolbar">
-            <span class="control-title">VIER SENSOREN &middot; SCHWELLWERT 0 &ndash; 127
+            <span class="control-title"><span data-i18n="buttons.legend">FOUR SENSORS &middot; THRESHOLD 0 &ndash; 127</span>
               <b class="raw-answer" id="button-raw" hidden></b>
             </span>
             <div>
-              <button id="load-buttons" class="text-button" data-device-control>Laden</button>
-              <button id="save-buttons" class="secondary-button" data-device-control>In die Maus schreiben</button>
+              <button id="load-buttons" class="text-button" data-device-control data-i18n="buttons.load">Load</button>
+              <button id="save-buttons" class="secondary-button" data-device-control data-i18n="buttons.write">Write to mouse</button>
             </div>
           </div>
 
           <div class="sensor-list">
             <div class="sensor-row sensor-header">
-              <span>Sensor</span><span>Schwellwert</span><span>Aktiv</span>
+              <span data-i18n="buttons.colSensor">Sensor</span><span data-i18n="buttons.colThreshold">Threshold</span><span data-i18n="buttons.colActive">Active</span>
             </div>
 
             <div class="sensor-row">
-              <label>Links Force</label>
+              <label data-i18n="sensor.leftForce">Left Force</label>
               <div class="threshold"><input id="leftForce-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="leftForce-threshold-value">64</output></div>
-              <input id="leftForce-enabled" type="checkbox" checked data-device-control aria-label="Links Force aktiv">
+              <input id="leftForce-enabled" type="checkbox" checked data-device-control aria-label="Left Force active">
             </div>
 
             <div class="sensor-row">
-              <label>Links Hall</label>
+              <label data-i18n="sensor.leftHall">Left Hall</label>
               <div class="threshold"><input id="leftHall-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="leftHall-threshold-value">64</output></div>
-              <input id="leftHall-enabled" type="checkbox" data-device-control aria-label="Links Hall aktiv">
+              <input id="leftHall-enabled" type="checkbox" data-device-control aria-label="Left Hall active">
             </div>
 
             <div class="sensor-row">
-              <label>Rechts Force</label>
+              <label data-i18n="sensor.rightForce">Right Force</label>
               <div class="threshold"><input id="rightForce-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="rightForce-threshold-value">64</output></div>
-              <input id="rightForce-enabled" type="checkbox" checked data-device-control aria-label="Rechts Force aktiv">
+              <input id="rightForce-enabled" type="checkbox" checked data-device-control aria-label="Right Force active">
             </div>
 
             <div class="sensor-row">
-              <label>Rechts Hall</label>
+              <label data-i18n="sensor.rightHall">Right Hall</label>
               <div class="threshold"><input id="rightHall-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="rightHall-threshold-value">64</output></div>
-              <input id="rightHall-enabled" type="checkbox" data-device-control aria-label="Rechts Hall aktiv">
+              <input id="rightHall-enabled" type="checkbox" data-device-control aria-label="Right Hall active">
             </div>
           </div>
-          <p class="hint">Je Taste misst nur ein Sensor: Eine Freigabe hebt die
-          bisherige derselben Seite auf. Die Schwellwerte wirken im Ger&auml;t
-          selbst &ndash; liegt eine Schwelle &uuml;ber dem Druck, den der Sensor
-          tats&auml;chlich erreicht, l&ouml;st die Taste am ganzen Rechner nicht mehr
-          aus, auch nach dem Schlie&szlig;en dieser Seite. Die Freigabe entscheidet
-          zugleich, welchem Sensor die Live-&Uuml;berwachung je Taste folgt; sie
-          zeigt die erreichbaren Werte.</p>
-          <p class="hint">Meldet die Maus beim Lesen keine einzige Freigabe
-          zur&uuml;ck &ndash; erkennbar an einer Antwort, in der kein Byte &uuml;ber
-          127 liegt &ndash;, tritt an ihre Stelle, was zuletzt in das Ger&auml;t
-          geschrieben wurde. Dieser Vermerk bleibt in diesem Browser erhalten,
-          auch nach dem Trennen und Neuladen. &bdquo;Laden&ldquo; verwirft dann
-          also ungespeicherte &Auml;nderungen. Wurde noch nie geschrieben, gilt
-          die Annahme, es messe die Force-Sensorik. Die Schwellwerte kommen in
-          jedem Fall aus dem Ger&auml;t, und beim Schreiben geht die Freigabe
-          vollst&auml;ndig hin.</p>        </div>
+          <p class="hint" data-i18n="buttons.hint1">Only one sensor measures per
+          button: enabling one releases the one so far on the same side. The
+          thresholds take effect in the device itself &ndash; if a threshold lies
+          above the pressure the sensor actually reaches, the button stops
+          triggering across the whole computer, even after this page is closed.
+          The enable also decides which sensor live monitoring follows per
+          button; it shows the values that can be reached.</p>
+          <p class="hint" data-i18n="buttons.hint2">If the mouse reports no
+          enable at all when read &ndash; recognisable by an answer in which no
+          byte lies above 127 &ndash;, what was last written to the device takes
+          its place. That note stays in this browser, even after disconnecting
+          and reloading. &ldquo;Load&rdquo; therefore discards unsaved changes.
+          If nothing has ever been written, the assumption is that the force
+          sensors measure. The thresholds come from the device in every case,
+          and on writing the enable goes across in full.</p>        </div>
       </details>
 
       <details class="accordion" name="config" data-view="wheel">
         <summary>
           <span class="accordion-index">04</span>
-          <span class="accordion-title">Radkalibrierung<small>Offsets, Amplituden und Druckschwelle</small></span>
+          <span class="accordion-title"><span data-i18n="acc.wheel.title">Wheel calibration</span><small data-i18n="acc.wheel.sub">Offsets, amplitudes and pressure threshold</small></span>
         </summary>
         <div class="accordion-body">
           <div class="calibration-fields">
-            <label>Offset X<input id="offset-x" type="number" min="-32768" max="32767" value="0" data-device-control></label>
-            <label>Offset Z<input id="offset-z" type="number" min="-32768" max="32767" value="0" data-device-control></label>
-            <label>Amplitude X<input id="amplitude-x" type="number" min="1" max="32767" value="1" data-device-control></label>
-            <label>Amplitude Z<input id="amplitude-z" type="number" min="1" max="32767" value="1" data-device-control></label>
-            <label>Ellipsenwinkel<input id="ellipse-angle" type="number" min="-32768" max="32767" value="0" data-device-control></label>
-            <label>Druckschwelle<input id="press-trigger" type="number" step="1" value="0" data-device-control></label>
+            <label><span data-i18n="cal.offsetX">Offset X</span><input id="offset-x" type="number" min="-32768" max="32767" value="0" data-device-control></label>
+            <label><span data-i18n="cal.offsetZ">Offset Z</span><input id="offset-z" type="number" min="-32768" max="32767" value="0" data-device-control></label>
+            <label><span data-i18n="cal.amplitudeX">Amplitude X</span><input id="amplitude-x" type="number" min="1" max="32767" value="1" data-device-control></label>
+            <label><span data-i18n="cal.amplitudeZ">Amplitude Z</span><input id="amplitude-z" type="number" min="1" max="32767" value="1" data-device-control></label>
+            <label><span data-i18n="cal.ellipse">Ellipse angle</span><input id="ellipse-angle" type="number" min="-32768" max="32767" value="0" data-device-control></label>
+            <label><span data-i18n="cal.trigger">Pressure threshold</span><input id="press-trigger" type="number" step="1" value="0" data-device-control></label>
           </div>
           <div class="calibration-actions">
-            <button id="load-calibration" class="text-button" data-device-control>Werte laden</button>
-            <button id="save-calibration" class="secondary-button" data-device-control>Werte speichern</button>
-            <button id="start-calibration" class="primary-button" data-device-control>360&deg;-Kalibrierung starten</button>
+            <button id="load-calibration" class="text-button" data-device-control data-i18n="cal.load">Load values</button>
+            <button id="save-calibration" class="secondary-button" data-device-control data-i18n="cal.save">Save values</button>
+            <button id="start-calibration" class="primary-button" data-device-control data-i18n="cal.start">Start 360&deg; calibration</button>
           </div>
-          <p class="hint">Der Kalibrierlauf erwartet eine vollst&auml;ndige Umdrehung
-          des Rads. Die Druckschwelle wird tausendfach gr&ouml;&szlig;er angezeigt, als die
-          Firmware sie f&uuml;hrt &ndash; genau wie im Desktop-Werkzeug. In dieser
-          Darstellung ist sie unmittelbar mit dem Radius aus der Live-Ansicht
-          vergleichbar.</p>
+          <p class="hint" data-i18n="cal.hint">The calibration run expects one
+          full revolution of the wheel. The pressure threshold is shown a
+          thousand times larger than the firmware keeps it &ndash; exactly as in
+          the desktop tool. In this form it compares directly with the radius
+          from the live view.</p>
         </div>
       </details>
         </section>
@@ -340,16 +351,17 @@
       "imports": {
         "three": "./js/vendor/three.module.min.js",
         "three/addons/": "./js/vendor/addons/",
-        "./js/app.js": "./js/app.js?v=31",
-        "./js/bluetooth.js": "./js/bluetooth.js?v=31",
-        "./js/charts.js": "./js/charts.js?v=31",
-        "./js/model3d.js": "./js/model3d.js?v=31",
-        "./js/protocol.js": "./js/protocol.js?v=31",
-        "./js/webhid.js": "./js/webhid.js?v=31"
+        "./js/app.js": "./js/app.js?v=32",
+        "./js/bluetooth.js": "./js/bluetooth.js?v=32",
+        "./js/charts.js": "./js/charts.js?v=32",
+        "./js/i18n.js": "./js/i18n.js?v=32",
+        "./js/model3d.js": "./js/model3d.js?v=32",
+        "./js/protocol.js": "./js/protocol.js?v=32",
+        "./js/webhid.js": "./js/webhid.js?v=32"
       }
     }
   </script>
-  <script type="module" src="./js/intro.js?v=31"></script>
-  <script type="module" src="./js/app.js?v=31"></script>
+  <script type="module" src="./js/intro.js?v=32"></script>
+  <script type="module" src="./js/app.js?v=32"></script>
 </body>
 </html>

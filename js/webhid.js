@@ -7,6 +7,7 @@ import {
   encodeCalibration,
   encodeDpi,
 } from "./protocol.js";
+import { t } from "./i18n.js";
 
 // WebHID-Transport nach WEBHID_PROTOCOL.md.
 //
@@ -34,10 +35,10 @@ const COMMAND = Object.freeze({
 });
 
 const STATUS_MESSAGES = [
-  "erfolgreich",
-  "unbekannter Befehl",
-  "ungültige Nutzdatenlänge",
-  "Gerät hat den Befehl abgelehnt",
+  "",
+  "status.1",
+  "status.2",
+  "status.3",
 ];
 
 const RECONNECT_INTERVAL = 2000;
@@ -79,22 +80,18 @@ export class XensivMouseHid extends EventTarget {
 
   async connect() {
     if (!this.available) {
-      throw new Error(
-        "WebHID steht nicht zur Verfügung. Bitte aktuelles Chrome oder " +
-        "Edge über HTTPS beziehungsweise localhost verwenden.");
+      throw new Error(t("error.noWebhid"));
     }
 
     const devices = await navigator.hid.requestDevice({
       filters: [{ vendorId: XENSIV_VENDOR_ID, productId: XENSIV_PRODUCT_ID }],
     });
 
-    if (devices.length === 0) throw new Error("Keine XENSIV Maus ausgewählt");
+    if (devices.length === 0) throw new Error(t("error.noneChosen"));
 
     const device = devices.find(hasConfigurationReport);
     if (!device) {
-      throw new Error(
-        "Die gewählte Maus bietet den Feature-Report 0x10 nicht an. Bitte " +
-        "die Firmware aktualisieren und das Gerät neu koppeln.");
+      throw new Error(t("error.noReport"));
     }
 
     await this.attach(device);
@@ -156,7 +153,7 @@ export class XensivMouseHid extends EventTarget {
   // Erzwungener Neuaufbau – die Alternative zum Neustart der Maus.
   async reset() {
     const device = this.device || (await this.knownDevices())[0];
-    if (!device) throw new Error("Es ist noch keine Maus freigegeben.");
+    if (!device) throw new Error(t("error.noneReleased"));
 
     this.userDisconnect = true;
     this.stopReconnect();
@@ -276,10 +273,10 @@ export class XensivMouseHid extends EventTarget {
   }
 
   async executeCommand(command, payload) {
-    if (!this.connected) throw new Error("Die Maus ist nicht verbunden");
+    if (!this.connected) throw new Error(t("error.notConnected"));
 
     if (payload.byteLength > REPORT_SIZE - 2) {
-      throw new Error("Nutzdaten passen nicht in den Feature-Report");
+      throw new Error(t("error.payloadTooBig"));
     }
 
     const request = new Uint8Array(REPORT_SIZE);
@@ -292,14 +289,19 @@ export class XensivMouseHid extends EventTarget {
       await this.device.receiveFeatureReport(FEATURE_REPORT_ID));
 
     if (response.byteLength !== REPORT_SIZE) {
-      throw new Error(`Antwort hat ${response.byteLength} statt ${REPORT_SIZE} Byte`);
+      throw new Error(t("error.wrongLength",
+        { actual: response.byteLength, expected: REPORT_SIZE }));
     }
     if (response[0] !== command) {
-      throw new Error(`Antwort gehört zu Befehl ${response[0]}, nicht ${command}`);
+      throw new Error(t("error.wrongCommand",
+        { actual: response[0], expected: command }));
     }
     if (response[1] !== 0) {
-      throw new Error(
-        `Befehl ${command}: ${STATUS_MESSAGES[response[1]] || `Fehler ${response[1]}`}`);
+      const status = STATUS_MESSAGES[response[1]];
+      throw new Error(t("error.commandFailed", {
+        command,
+        reason: status ? t(status) : t("status.unknown", { code: response[1] }),
+      }));
     }
 
     const responseLength = response[2];

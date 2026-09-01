@@ -2,7 +2,9 @@ import { XensivMouseHid } from "./webhid.js";
 import { XensivMouseBluetooth } from "./bluetooth.js";
 import { WheelCharts } from "./charts.js";
 import { MouseModel } from "./model3d.js";
-import { SENSOR_KEYS, SENSOR_LABELS } from "./protocol.js";
+import { SENSOR_KEYS, sensorLabel } from "./protocol.js";
+import { LANGUAGES, language, onLanguage, setLanguage, t, translate }
+  from "./i18n.js";
 
 // WebHID ist der bevorzugte Weg: Die Maus beantwortet dort jeden
 // Befehl über einen einzigen Feature-Report, ohne Dienstsuche und
@@ -124,12 +126,12 @@ connectButton.addEventListener("click", async () => {
   }
 
   connectButton.disabled = true;
-  setConnectionState("searching", "Maus auswählen");
+  setConnectionState("searching", "state.selecting");
 
   try {
     await mouse.connect();
   } catch (error) {
-    setConnectionState("offline", "Nicht verbunden");
+    setConnectionState("offline", "state.offline");
     showError(error);
   } finally {
     connectButton.disabled = false;
@@ -138,12 +140,12 @@ connectButton.addEventListener("click", async () => {
 
 resetButton.addEventListener("click", async () => {
   resetButton.disabled = true;
-  setConnectionState("searching", "Wird zurückgesetzt");
+  setConnectionState("searching", "state.resetting");
 
   try {
     await mouse.reset();
   } catch (error) {
-    setConnectionState("offline", "Nicht verbunden");
+    setConnectionState("offline", "state.offline");
     showError(error);
   } finally {
     resetButton.disabled = false;
@@ -152,8 +154,10 @@ resetButton.addEventListener("click", async () => {
 
 mouse.addEventListener("connected", async ({ detail: device }) => {
   setDeviceControls(true);
-  setConnectionState("online", device.name || "XENSIV Maus");
-  setConnectButton("Trennen");
+  // Der Name kommt vom Gerät und bleibt, wie er ist - er ist das einzige
+  // Stück dieser Anzeige, das keiner Übersetzung bedarf.
+  setConnectionState("online", null, device.name || "XENSIV Maus");
+  setConnectButton("header.disconnect");
   resetButton.hidden = false;
 
   await updateBattery();
@@ -168,8 +172,7 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
     populateButtonConfig(await mouse.readButtonConfig());
   } catch (error) {
     showError(new Error(
-      `Tastenkonfiguration nicht lesbar: ${error.message}. ` +
-      `Die angezeigten Schwellwerte stammen aus der Voreinstellung.`));
+      t("msg.configUnreadable", { error: error.message })));
   }
 
   // Ohne die Druckschwelle aus der Kalibrierung lässt sich ein
@@ -180,7 +183,7 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
     // Ohne Kalibrierung bleibt das Rad in der Anzeige einfach ruhig
   }
 
-  notify("Maus verbunden");
+  notify(t("msg.connected"));
   previewLed(byId("led-color").value);
   if (liveTabActive()) startMonitoring();
 });
@@ -190,8 +193,8 @@ mouse.addEventListener("disconnected", () => {
   window.clearInterval(batteryTimer);
   batteryTimer = null;
   setDeviceControls(false);
-  setConnectionState("offline", "Nicht verbunden");
-  setConnectButton("Maus verbinden");
+  setConnectionState("offline", "state.offline");
+  setConnectButton("header.connect");
   batteryLabel.textContent = "--";
 
   // Die Beobachtungen gelten nur für die abgelaufene Sitzung. Was in die
@@ -205,12 +208,10 @@ mouse.addEventListener("disconnected", () => {
 });
 
 mouse.addEventListener("reconnecting", () => {
-  setConnectionState("waiting", "Warte auf die Maus");
-  setConnectButton("Warten beenden");
+  setConnectionState("waiting", "state.waiting");
+  setConnectButton("state.stopWaiting");
   resetButton.hidden = false;
-  notify(
-    "Die Maus hat sich abgemeldet – vermutlich Ruhezustand. " +
-    "Bewegen Sie die Maus; die Verbindung stellt sich selbst wieder her.");
+  notify(t("msg.asleep"));
 });
 
 mouse.addEventListener("notice", ({ detail }) => {
@@ -244,7 +245,7 @@ function startMonitoring() {
   if (monitoring || !mouse.connected) return;
 
   monitoring = true;
-  setLiveState("is-running", "Live-Überwachung läuft");
+  setLiveState("is-running", "state.running");
   monitorLoop();
 }
 
@@ -252,9 +253,7 @@ function stopMonitoring() {
   monitoring = false;
   wheelTicks.length = 0;
   byId("wheel-actual").textContent = "–";
-  setLiveState("", mouse.connected
-    ? "Live-Überwachung angehalten"
-    : "Nicht verbunden");
+  setLiveState("", mouse.connected ? "state.paused" : "state.offline");
 }
 
 // Wie viele Radwerte je Sekunde tatsächlich ankommen. Gefragt wird so
@@ -306,10 +305,15 @@ async function monitorLoop() {
   stopMonitoring();
 }
 
-function setLiveState(modifier, label) {
-  const element = byId("live-state");
-  element.className = `live-state ${modifier}`.trim();
-  element.lastChild.textContent = label;
+// Der Zustand wird als Schluessel gefuehrt, nicht als fertiger Text: Beim
+// Sprachwechsel muss er neu geschrieben werden, und dann ist nur noch die
+// Sprache eine andere, nicht der Zustand.
+let liveStateKey = "state.offline";
+
+function setLiveState(modifier, key) {
+  liveStateKey = key;
+  byId("live-state").className = `live-state ${modifier}`.trim();
+  byId("live-state-text").textContent = t(key);
 }
 
 function delay(milliseconds) {
@@ -363,10 +367,10 @@ async function loadConfigModel() {
 // ─── Konfiguration: das Modell folgt dem Reiter ───────
 
 const CONFIG_CAPTIONS = {
-  light: "Gesamtes Gerät",
-  pointer: "Unterseite · Bewegungslicht",
-  sensors: "Gehäuse ausgeblendet · Sensoren",
-  wheel: "Gehäuse ausgeblendet · Rad",
+  light: "view.light",
+  pointer: "view.pointer",
+  sensors: "view.sensors",
+  wheel: "view.wheel",
 };
 
 const configPanels = [
@@ -386,8 +390,8 @@ function applyConfigView() {
 
   configModel?.setView(view);
   byId("config-view").textContent =
-    panel ? panelTitle(panel).toUpperCase() : "ÜBERSICHT";
-  byId("config-caption").textContent = CONFIG_CAPTIONS[view];
+    panel ? panelTitle(panel).toUpperCase() : t("config.overview");
+  byId("config-caption").textContent = t(CONFIG_CAPTIONS[view]);
 }
 
 function panelTitle(panel) {
@@ -396,8 +400,12 @@ function panelTitle(panel) {
 
 // ─── Anzeige der Messwerte ────────────────────────────
 
+// Die Balken tragen übersetzten Text und werden beim Sprachwechsel neu
+// gebaut. Deshalb räumt die Funktion zuerst auf, statt anzuhängen.
 function buildPressBars() {
   const list = byId("press-list");
+  list.textContent = "";
+  pressBars.clear();
 
   SHOWN_SENSORS.forEach((key) => {
     const item = document.createElement("div");
@@ -405,8 +413,8 @@ function buildPressBars() {
 
     item.innerHTML = `
       <div class="press-head">
-        <span class="press-name"><i class="press-dot"></i>${SENSOR_LABELS[key]}</span>
-        <span class="press-values">Druck <b data-role="value">--</b> · Schwelle <b data-role="threshold">--</b></span>
+        <span class="press-name"><i class="press-dot"></i>${sensorLabel(key)}</span>
+        <span class="press-values">${t("press.value")} <b data-role="value">--</b> · ${t("press.threshold")} <b data-role="threshold">--</b></span>
       </div>
       <div class="press-track">
         <div class="press-fill" data-role="fill"></div>
@@ -494,6 +502,16 @@ SHOWN_SENSORS.forEach((key) => {
   });
   row.addEventListener("pointerleave", () => configModel?.clearFocus());
 });
+
+// Das Kaestchen traegt keinen sichtbaren Text; wer die Seite vorlesen laesst,
+// hoert nur diese Beschriftung. Sie setzt sich aus dem Sensornamen zusammen
+// und muss deshalb hier gebildet werden, nicht im Markup stehen.
+function labelSensorBoxes() {
+  SHOWN_SENSORS.forEach((key) => {
+    byId(`${key}-enabled`)?.setAttribute("aria-label",
+      t("sensor.active", { sensor: sensorLabel(key) }));
+  });
+}
 
 SHOWN_SENSORS.forEach((key) => {
   byId(`${key}-enabled`).addEventListener("change", () => {
@@ -629,11 +647,10 @@ function checkWheelTrigger(radius) {
   if (wheelPressTrigger <= 0 || wheelRadiusMin <= wheelPressTrigger) return;
 
   wheelHintShown = true;
-  notify(
-    `Die gespeicherte Maximallänge (${Math.round(wheelPressTrigger)}) liegt ` +
-    `unter dem Ruheradius des Rads (${Math.round(wheelRadiusMin)}). Ein ` +
-    `Radklick lässt sich damit nicht unterscheiden – bitte die ` +
-    `360°-Kalibrierung ausführen.`, true);
+  notify(t("msg.pressWarning", {
+    trigger: Math.round(wheelPressTrigger),
+    radius: Math.round(wheelRadiusMin),
+  }), true);
 }
 
 // Der gemeldete Winkel springt bei jeder vollen Umdrehung von 359 auf
@@ -707,12 +724,13 @@ document.querySelectorAll("[data-color]").forEach((button) => {
 });
 
 byId("motion-led").addEventListener("click", () => run(
-  () => mouse.setLed(255, 255, 255), "Bewegungslicht eingeschaltet"));
+  () => mouse.setLed(255, 255, 255), t("msg.motionOn")));
 
 async function applyLed(hex) {
   const rgb = toRgb(hex);
   previewLed(hex);
-  await run(() => mouse.setLed(...rgb), `LED auf ${hex.toUpperCase()} gesetzt`);
+  await run(() => mouse.setLed(...rgb),
+    t("msg.ledSet", { hex: hex.toUpperCase() }));
 }
 
 function previewLed(hex) {
@@ -754,7 +772,7 @@ byId("dpi").addEventListener("input", ({ target }) => {
 
 byId("dpi").addEventListener("change", ({ target }) => run(
   () => mouse.setDpi(Number(target.value)),
-  `Auflösung auf ${target.value} DPI gesetzt`));
+  t("msg.dpiSet", { dpi: target.value })));
 
 // Das Licht im Fenster der Unterseite folgt dem Regler, nicht dem Gerät: Es
 // zeigt, was eingestellt ist, und tut das auch ohne angeschlossene Maus.
@@ -770,7 +788,7 @@ function previewDpi() {
 
 byId("load-buttons").addEventListener("click", () => run(async () => {
   populateButtonConfig(await mouse.readButtonConfig());
-}, "Tasteneinstellungen geladen"));
+}, t("msg.buttonsLoaded")));
 
 byId("save-buttons").addEventListener("click", () => {
   const config = readButtonConfig();
@@ -782,7 +800,7 @@ byId("save-buttons").addEventListener("click", () => {
     // deshalb diese Notiz - sie ist die einzige Auskunft darüber, welcher
     // Sensor dort tatsächlich misst.
     rememberWritten(config);
-  }, "Tasteneinstellungen gespeichert");
+  }, t("msg.buttonsSaved"));
 });
 
 // Eine zu hohe Schwelle oder ein abgeschalteter Sensor macht die Taste
@@ -793,20 +811,18 @@ function confirmButtonConfig(config) {
   if (problems.length === 0) return true;
 
   return window.confirm(
-    "Diese Einstellung kann die Maustasten unbrauchbar machen:\n\n" +
-    problems.map((problem) => `• ${problem}`).join("\n") +
-    "\n\nTrotzdem in die Maus schreiben?");
+    `${t("confirm.head")}\n\n`
+    + problems.map((problem) => `\u2022 ${problem}`).join("\n")
+    + `\n\n${t("confirm.tail")}`);
 }
-
-const SIDE_LABELS = { left: "Linke Taste", right: "Rechte Taste" };
 
 function checkButtonConfig(config) {
   const problems = [];
 
-  Object.entries(SIDE_LABELS).forEach(([side, label]) => {
+  ["left", "right"].forEach((side) => {
     const key = activeSensor(side);
     if (!config[key].enabled) {
-      problems.push(`${label}: kein Sensor aktiv – die Taste löst nicht mehr aus`);
+      problems.push(t("problem.noSensor", { side: t(`side.${side}`) }));
     }
   });
 
@@ -815,16 +831,16 @@ function checkButtonConfig(config) {
     if (!config[key].enabled || seen === 0) return;
 
     if (config[key].threshold > seen) {
-      problems.push(
-        `${SENSOR_LABELS[key]}: Schwelle ${config[key].threshold} liegt über ` +
-        `dem höchsten gemessenen Druck ${seen}`);
+      problems.push(t("problem.tooHigh", {
+        sensor: sensorLabel(key),
+        threshold: config[key].threshold,
+        seen,
+      }));
     }
   });
 
   if (!configFromDevice) {
-    problems.push(
-      "Die Werte wurden nie vom Gerät gelesen – es sind Voreinstellungen " +
-      "dieser Seite, nicht die der Maus");
+    problems.push(t("problem.neverRead"));
   }
 
   return problems;
@@ -883,7 +899,7 @@ function showRawAnswer(config) {
   });
 
   const element = byId("button-raw");
-  element.textContent = `· ANTWORT ${bytes.join(" ")}`;
+  element.textContent = t("msg.answer", { bytes: bytes.join(" ") });
   element.hidden = false;
 }
 
@@ -904,7 +920,7 @@ function assumeForce() {
 
 byId("load-calibration").addEventListener("click", () => run(async () => {
   populateCalibration(await mouse.readCalibration());
-}, "Kalibrierung geladen"));
+}, t("msg.calLoaded")));
 
 byId("save-calibration").addEventListener("click", () => {
   const calibration = readCalibration();
@@ -913,12 +929,12 @@ byId("save-calibration").addEventListener("click", () => {
     await mouse.writeCalibration(calibration);
     // Ab jetzt führt das Gerät diesen Wert.
     wheelPressTrigger = calibration.pressTrigger * PRESS_TRIGGER_SCALE;
-  }, "Kalibrierung gespeichert");
+  }, t("msg.calSaved"));
 });
 
 byId("start-calibration").addEventListener("click", () => run(
   () => mouse.startCalibration(),
-  "Kalibrierung gestartet. Bitte das Rad einmal vollständig drehen."));
+  t("msg.calStarted")));
 
 function readCalibration() {
   return {
@@ -994,13 +1010,23 @@ function setDeviceControls(enabled) {
   });
 }
 
-function setConnectionState(state, label) {
+// Auch hier steht der Schluessel im Vordergrund. Nur der Geraetename kommt
+// fertig herein - er ist keine Uebersetzung wert und vertruege auch keine.
+let connectionKey = "state.offline";
+let connectionText = null;
+let connectButtonKey = "header.connect";
+
+function setConnectionState(state, key, text = null) {
+  connectionKey = key;
+  connectionText = text;
   connectionLabel.dataset.state = state;
-  connectionLabel.querySelector("span:last-child").textContent = label;
+  connectionLabel.querySelector("span:last-child").textContent =
+    text ?? t(key);
 }
 
-function setConnectButton(label) {
-  connectButton.querySelector("span").textContent = label;
+function setConnectButton(key) {
+  connectButtonKey = key;
+  connectButton.querySelector("span").textContent = t(key);
 }
 
 function notify(message, error = false) {
@@ -1024,11 +1050,54 @@ function byId(id) {
   return document.getElementById(id);
 }
 
+// ─── Sprache ──────────────────────────────────────────
+
+// Das Markup bringt seine Texte selbst mit; hier bleibt, was das Skript
+// erzeugt hat. Wer eigene Texte setzt, muss sie beim Wechsel neu setzen -
+// eine Anzeige, die auf halber Strecke die Sprache wechselt, waere
+// schlimmer als gar keine Auswahl.
+function refreshTexts() {
+  connectionLabel.querySelector("span:last-child").textContent =
+    connectionText ?? t(connectionKey);
+  connectButton.querySelector("span").textContent = t(connectButtonKey);
+  byId("live-state-text").textContent = t(liveStateKey);
+
+  buildPressBars();
+  showActiveSensors();
+  labelSensorBoxes();
+  if (lastRead) {
+    showRawAnswer(lastRead);
+    SHOWN_SENSORS.forEach((key) => {
+      const bar = pressBars.get(key);
+      if (bar) bar.threshold.textContent = lastRead[key].threshold;
+    });
+  }
+  applyConfigView();
+}
+
+const languageSelect = byId("language");
+Object.entries(LANGUAGES).forEach(([code, name]) => {
+  const option = document.createElement("option");
+  option.value = code;
+  option.textContent = name;
+  languageSelect.appendChild(option);
+});
+languageSelect.value = language();
+languageSelect.addEventListener("change", ({ target }) => {
+  setLanguage(target.value);
+});
+onLanguage(refreshTexts);
+
+// Beim ersten Aufruf steht das Englische schon im Markup. Nur wenn eine
+// andere Sprache gemerkt ist, aendert dieser Aufruf etwas.
+translate();
+
 // ─── Start ────────────────────────────────────────────
 
 buildPressBars();
 setDeviceControls(false);
 showActiveSensors();
+labelSensorBoxes();
 previewLed(byId("led-color").value);
 resetLiveReadouts();
 stopMonitoring();
@@ -1040,17 +1109,14 @@ byId("stage-transport").textContent = useHid ? "WEBHID · REPORT 0x10" : "BLE / 
 
 if (!mouse.available) {
   connectButton.disabled = true;
-  setConnectionState("offline", "Nicht unterstützt");
-  notify(
-    "Weder WebHID noch Web Bluetooth stehen zur Verfügung. Bitte ein " +
-    "aktuelles Chrome, Edge oder Opera über HTTPS oder localhost nutzen.",
-    true);
+  setConnectionState("offline", "state.unsupported");
+  notify(t("msg.noTransport"), true);
 } else {
   mouse.knownDevices().then(async (devices) => {
     if (devices.length === 0) return;
 
     resetButton.hidden = false;
-    setConnectionState("searching", "Verbinde automatisch");
+    setConnectionState("searching", "state.autoConnect");
 
     try {
       await mouse.connectKnown();
