@@ -269,6 +269,34 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .mouse-glow { fill: transparent; opacity: 0; filter: blur(18px); transition: opacity .15s ease, fill .15s ease; }
 .mouse-label { fill: #6d9298; font-family: inherit; font-size: 15px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
 
+/* Das Namensschild des herangeholten Sensors. Es hängt über dem Bauteil und
+   bekommt seinen Platz je Bild aus der Kamera. Der Abstand nach oben ist
+   grosszuegig: Das Bauteil ist klein, und die Blase sass ihm sonst auf. */
+.model-label {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, calc(-100% - 42px));
+  padding: 7px 11px;
+  border-radius: 3px;
+  background: #04191a;
+  border: 1px solid var(--accent);
+  color: #eafcfa;
+  font: 600 12px "IBM Plex Mono", monospace;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 20px #0009;
+}
+.model-label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1px;
+  height: 34px;
+  margin-left: -1px;
+  background: linear-gradient(var(--accent), transparent);
+}
+
 .stage-readout { position: relative; z-index: 1; display: grid; gap: 8px; }
 .stage-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 8px; border-top: 1px solid var(--stage-line); }
 .stage-line span { color: #9fb3b5; font: 500 10px "IBM Plex Mono", monospace; }

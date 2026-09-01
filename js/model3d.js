@@ -64,6 +64,21 @@ const PRESS_GLOW = 0.35;
 const SENSOR_GLOW = 1.6;
 const SENSOR_HALO = 0.016;                               // m
 
+// Zeigt der Betrachter auf eine Sensorzeile, rückt das Modell den Sensor
+// heran. Die Blickrichtung dreht dabei mit: Der Hall-Sensor liegt oben auf
+// dem Steg, der Force-Sensor unten darunter – ohne den Schwenk sähe man nur
+// die Platine, die ihn verdeckt. Der Schwenk zur Seite holt ihn aus der
+// Verkürzung heraus, in der er sonst am Rand der Platine käme.
+//
+// Der Lichthof schrumpft dabei: Aus der Entfernung macht er das Bauteil
+// überhaupt erst auffindbar, aus der Nähe überstrahlte er genau das, was
+// man sehen will.
+const FOCUS_DISTANCE = 0.062;                            // m
+const FOCUS_TILT = 0.8;                                  // rad zur Senkrechten
+const FOCUS_SWING = 0.7;                                 // rad zur Sensorseite
+const FOCUS_EASE = 0.11;
+const FOCUS_HALO = 0.5;                                  // Vielfaches
+
 // Über diesen Anteil der Tastenlänge klingt die Farbe nach hinten aus. Sie
 // erlischt genau am Schlitzende – dort hört die Taste auf – reißt dort aber
 // nicht an einer Kante ab, sondern verliert sich schon vorher. Ein Viertel
@@ -116,19 +131,31 @@ export class MouseModel {
     this.shell = [];
     this.sensors = {};
     this.chosen = {};
+    this.focus = null;
     this.wheels = [];
     this.wheelMaterials = [];
     this.restWheel = [];
     this.press = null;
     this.hull = [];
     this.distance = 0.3;
+    this.baseDistance = 0.3;
 
     // Rechengrößen für die Bildschleife, einmal angelegt statt je Bild neu.
     this.direction = new THREE.Vector3();
     this.right = new THREE.Vector3();
     this.upward = new THREE.Vector3();
     this.target = new THREE.Vector3();
+    this.baseTarget = new THREE.Vector3();
+    this.place = new THREE.Vector3();
     this.worldUp = new THREE.Vector3(0, 1, 0);
+
+    // Das Namensschild ist eine Beschriftung, kein Bauteil: Als Text im
+    // Dokument bleibt es bei jeder Auflösung scharf und nimmt die Schrift
+    // der Seite an. Seinen Platz bekommt es je Bild aus der Kamera.
+    this.label = document.createElement("div");
+    this.label.className = "model-label";
+    this.label.hidden = true;
+    canvas.parentElement.appendChild(this.label);
 
     this.#setupStage();
     this.#setupInput();
@@ -185,7 +212,7 @@ export class MouseModel {
 
     this.canvas.addEventListener("pointermove", (event) => {
       if (!pointers.has(event.pointerId) || !last) return;
-      if (!this.view.turn) return;
+      if (!this.view.turn || this.focus) return;
       this.azimuth -= (event.clientX - last.clientX) * 0.008;
       this.polar = clamp(
         this.polar - (event.clientY - last.clientY) * 0.008, ...this.view.turn);
@@ -240,6 +267,7 @@ export class MouseModel {
           material: object.material,
           rest: object.material.color.clone(),
           halo: this.#addHalo(place),
+          position: place.clone(),
         };
       }
     });
@@ -259,8 +287,9 @@ export class MouseModel {
     const points = extremePoints(root);
     const box = new THREE.Box3();
     points.forEach((point) => box.expandByPoint(point));
-    box.getCenter(this.target);
-    this.hull = points.map((point) => point.sub(this.target));
+    box.getCenter(this.baseTarget);
+    this.hull = points.map((point) => point.sub(this.baseTarget));
+    this.target.copy(this.baseTarget);
     this.#updateFraming();
   }
 
@@ -274,6 +303,7 @@ export class MouseModel {
     const view = VIEWS[name] || VIEWS.live;
     if (view === this.view) return;
     this.view = view;
+    this.clearFocus();
 
     this.shell.forEach((part) => { part.visible = view.shell; });
     this.wheelMaterials.forEach((material, index) => {
@@ -297,12 +327,42 @@ export class MouseModel {
     this.#showSensors();
   }
 
+  // Zeigt der Betrachter auf eine Sensorzeile, holt das Modell diesen einen
+  // Sensor heran und nennt seinen Namen – auch einen abgeschalteten, denn
+  // gerade beim Umstellen will man sehen, worum es geht.
+  focusSensor(family, side, name) {
+    const sensor = this.sensors[`${family}.${side}`];
+    if (!sensor || this.view !== VIEWS.sensors) return;
+
+    this.focus = {
+      sensor,
+      key: `${family}.${side}`,
+      // Von der Fläche her, auf der er klebt, und von seiner Seite: Sonst
+      // verdeckte ihn die Platine oder er verschwände in der Verkürzung.
+      polar: family === "hall" ? FOCUS_TILT : Math.PI - FOCUS_TILT,
+      azimuth: Math.sign(sensor.position.x) * FOCUS_SWING,
+    };
+    this.label.textContent = name;
+    this.#showSensors();
+  }
+
+  clearFocus() {
+    if (!this.focus) return;
+    this.focus = null;
+    this.label.hidden = true;
+    this.#showSensors();
+  }
+
   #showSensors() {
     Object.entries(this.sensors).forEach(([key, sensor]) => {
       const [family, side] = key.split(".");
-      const on = this.view === VIEWS.sensors && this.chosen[side] === family;
+      const aimed = this.focus?.key === key;
+      const on = this.view === VIEWS.sensors
+        && (aimed || this.chosen[side] === family);
+
       tint(sensor.material, sensor.rest, on, SENSOR_GLOW);
       sensor.halo.visible = on;
+      sensor.halo.scale.setScalar(aimed ? SENSOR_HALO * FOCUS_HALO : SENSOR_HALO);
     });
     this.#invalidate();
   }
@@ -457,9 +517,10 @@ export class MouseModel {
     const horizontal = vertical * this.camera.aspect;
 
     if (!this.view.turn) {
-      this.distance = this.#fitDistance(
+      this.baseDistance = this.#fitDistance(
         this.view.home.azimuth, this.view.home.polar, horizontal, vertical)
         * FIT_MARGIN;
+      if (!this.focus) this.distance = this.baseDistance;
       return;
     }
 
@@ -474,7 +535,8 @@ export class MouseModel {
           this.#fitDistance(azimuth, polar, horizontal, vertical));
       }
     }
-    this.distance = worst * FIT_MARGIN;
+    this.baseDistance = worst * FIT_MARGIN;
+    if (!this.focus) this.distance = this.baseDistance;
   }
 
   // Wie weit muss die Kamera weg, damit das Modell ins Bild passt? Ein Punkt
@@ -517,7 +579,16 @@ export class MouseModel {
       moving = true;
     }
 
-    if (idle > RETURN_DELAY) {
+    // Beim Fokus führt der Sensor die Kamera: Sie schwenkt auf die Seite, von
+    // der er zu sehen ist, und rückt an ihn heran. Ohne Fokus gilt wieder die
+    // Ruhelage, in die die Ansicht nach kurzer Zeit zurückgleitet.
+    if (this.focus) {
+      const swing = shortestAngle(this.azimuth, this.focus.azimuth);
+      this.azimuth += swing * FOCUS_EASE;
+      this.polar += (this.focus.polar - this.polar) * FOCUS_EASE;
+      moving = moving || Math.abs(swing) > 1e-3
+        || Math.abs(this.focus.polar - this.polar) > 1e-3;
+    } else if (idle > RETURN_DELAY) {
       const home = this.view.home;
       const azimuth = shortestAngle(this.azimuth, home.azimuth);
       this.azimuth += azimuth * RETURN_EASE;
@@ -530,6 +601,14 @@ export class MouseModel {
       }
     }
 
+    const wantDistance = this.focus ? FOCUS_DISTANCE : this.baseDistance;
+    const wantTarget = this.focus ? this.focus.sensor.position : this.baseTarget;
+    this.distance += (wantDistance - this.distance) * FOCUS_EASE;
+    this.target.lerp(wantTarget, FOCUS_EASE);
+    moving = moving
+      || Math.abs(wantDistance - this.distance) > 1e-5
+      || this.target.distanceTo(wantTarget) > 1e-5;
+
     this.direction.set(
       Math.sin(this.polar) * Math.sin(this.azimuth),
       Math.cos(this.polar),
@@ -540,7 +619,23 @@ export class MouseModel {
     this.camera.lookAt(this.target);
 
     this.renderer.render(this.scene, this.camera);
+    this.#placeLabel();
     if (moving) this.#invalidate();
+  }
+
+  // Das Schild hängt am Bauteil, nicht am Bildrand: Sein Platz wird aus der
+  // Kamera zurückgerechnet, damit es beim Heranfahren mitwandert. Der Versatz
+  // des Zeichenfelds gehört dazu - es steht mittig in der Bühne, nicht bündig.
+  #placeLabel() {
+    if (!this.focus) return;
+    this.place.copy(this.focus.sensor.position).project(this.camera);
+    const left = this.canvas.offsetLeft
+      + (this.place.x * 0.5 + 0.5) * this.canvas.clientWidth;
+    const top = this.canvas.offsetTop
+      + (-this.place.y * 0.5 + 0.5) * this.canvas.clientHeight;
+    this.label.style.left = `${Math.round(left)}px`;
+    this.label.style.top = `${Math.round(top)}px`;
+    this.label.hidden = false;
   }
 }
 

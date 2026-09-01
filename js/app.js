@@ -417,8 +417,33 @@ function showActiveSensors() {
 // ihm die Lage des Bauteils. Ein abgeschalteter Sensor zählt als keiner.
 function sensorFamily(key) {
   if (!byId(`${key}-enabled`).checked) return null;
+  return familyOf(key);
+}
+
+function familyOf(key) {
   return key.endsWith("Hall") ? "hall" : "force";
 }
+
+function sideOf(key) {
+  return key.startsWith("left") ? "left" : "right";
+}
+
+// Zeigt der Betrachter auf eine Sensorzeile, holt das Modell diesen Sensor
+// heran und nennt seine Typenbezeichnung. Der Force-Sensor trägt keine.
+const SENSOR_NAMES = {
+  hall: "TLI49901 / TLI55910",
+  force: "No Name",
+};
+
+LIVE_SENSORS.forEach((key) => {
+  const row = byId(`${key}-enabled`).closest(".sensor-row");
+  if (!row) return;
+
+  row.addEventListener("pointerenter", () => {
+    configModel?.focusSensor(familyOf(key), sideOf(key), SENSOR_NAMES[familyOf(key)]);
+  });
+  row.addEventListener("pointerleave", () => configModel?.clearFocus());
+});
 
 SENSOR_KEYS.forEach((key) => {
   byId(`${key}-enabled`).addEventListener("change", () => {
