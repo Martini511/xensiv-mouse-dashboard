@@ -231,11 +231,12 @@ export class MouseModel {
         centreOf(object, this.ledLight.position);
       }
       if (name.startsWith(SENSOR)) {
-        // Welcher der beiden links ist, sagt allein ihre Lage – dieselbe
-        // Regel wie bei den Tasten, damit beides zusammenpasst.
+        // Der Name nennt die Familie, die Lage die Seite – letzteres nach
+        // derselben Regel wie bei den Tasten, damit beides zusammenpasst.
         centreOf(object, place);
         const side = (place.x >= 0) === LEFT_IS_POSITIVE_X ? "left" : "right";
-        this.sensors[side] = {
+        const family = name.includes("hall") ? "hall" : "force";
+        this.sensors[`${family}.${side}`] = {
           material: object.material,
           rest: object.material.color.clone(),
           halo: this.#addHalo(place),
@@ -287,17 +288,19 @@ export class MouseModel {
     this.#invalidate();
   }
 
-  // Hervorgehoben wird der Sensor einer Seite, sobald dort einer freigegeben
-  // ist. Die Platine trägt je Taste nur ein Gehäuse - ob darin Force oder
-  // Hall misst, ist ihr von außen nicht anzusehen.
+  // Hervorgehoben wird je Taste der Sensor, der im Gerät auch misst. Die
+  // Platine trägt beide Familien: den Hall-Sensor oben am freien Ende des
+  // Stegs, den Force-Sensor unten an seiner Einspannung. Übergeben wird je
+  // Seite "hall", "force" oder nichts.
   setSensors(chosen) {
     this.chosen = chosen;
     this.#showSensors();
   }
 
   #showSensors() {
-    Object.entries(this.sensors).forEach(([side, sensor]) => {
-      const on = this.view === VIEWS.sensors && Boolean(this.chosen[side]);
+    Object.entries(this.sensors).forEach(([key, sensor]) => {
+      const [family, side] = key.split(".");
+      const on = this.view === VIEWS.sensors && this.chosen[side] === family;
       tint(sensor.material, sensor.rest, on, SENSOR_GLOW);
       sensor.halo.visible = on;
     });

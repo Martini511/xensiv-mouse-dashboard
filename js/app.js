@@ -403,13 +403,21 @@ function showActiveSensors() {
     bar.item.classList.toggle("is-off", !active.includes(key));
   });
 
-  // Am Modell tritt der Sensor einer Seite hervor, sobald dort einer
-  // freigegeben ist. Die Platine trägt je Taste nur ein Gehäuse – ob darin
-  // Force oder Hall misst, ist ihm von außen nicht anzusehen.
+  // Am Modell tritt je Taste der Sensor hervor, der auch misst – der
+  // Hall-Sensor oben am freien Ende des Stegs, der Force-Sensor unten an
+  // seiner Einspannung. Ist auf einer Seite keiner freigegeben, bleibt sie
+  // dunkel.
   configModel?.setSensors({
-    left: byId(`${active[0]}-enabled`).checked,
-    right: byId(`${active[1]}-enabled`).checked,
+    left: sensorFamily(active[0]),
+    right: sensorFamily(active[1]),
   });
+}
+
+// Aus "leftHall" wird "hall": Das Modell kennt die Familie, die Seite sagt
+// ihm die Lage des Bauteils. Ein abgeschalteter Sensor zählt als keiner.
+function sensorFamily(key) {
+  if (!byId(`${key}-enabled`).checked) return null;
+  return key.endsWith("Hall") ? "hall" : "force";
 }
 
 SENSOR_KEYS.forEach((key) => {
