@@ -73,7 +73,10 @@ const SENSOR_HALO = 0.016;                               // m
 // Der Lichthof schrumpft dabei: Aus der Entfernung macht er das Bauteil
 // überhaupt erst auffindbar, aus der Nähe überstrahlte er genau das, was
 // man sehen will.
-const FOCUS_DISTANCE = 0.062;                            // m
+// Der Fokus rückt auf diesen Bruchteil des Ruheabstands heran. Ein fester
+// Abstand in Metern taugt dafür nicht: Wie gross das Bauteil erscheint, hängt
+// auch am Zeichenfeld, und das wächst mit dem Fenster.
+const FOCUS_ZOOM = 0.22;
 const FOCUS_TILT = 0.8;                                  // rad zur Senkrechten
 const FOCUS_SWING = 0.7;                                 // rad zur Sensorseite
 const FOCUS_EASE = 0.11;
@@ -601,7 +604,8 @@ export class MouseModel {
       }
     }
 
-    const wantDistance = this.focus ? FOCUS_DISTANCE : this.baseDistance;
+    const wantDistance = this.focus
+      ? this.baseDistance * FOCUS_ZOOM : this.baseDistance;
     const wantTarget = this.focus ? this.focus.sensor.position : this.baseTarget;
     this.distance += (wantDistance - this.distance) * FOCUS_EASE;
     this.target.lerp(wantTarget, FOCUS_EASE);

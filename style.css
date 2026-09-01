@@ -176,16 +176,21 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
   display: grid;
   grid-template-columns: minmax(320px, 38%) minmax(520px, 62%);
   min-height: calc(100vh - 140px);
+  /* Die Bühne wächst nicht mit der Spalte daneben. Würde sie das, sässe das
+     Modell in ihrer Mitte – also weit unter dem Bildrand. Sie ist so hoch
+     wie das Fenster; darunter führt die Hülle ihre Farbe weiter, damit die
+     linke Spalte nicht abbricht. */
+  align-items: start;
+  background: linear-gradient(90deg, var(--stage) 0 38%, transparent 38%);
 }
 
 .device-stage {
   position: relative;
   overflow: hidden;
+  height: calc(100vh - 140px);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 24px;
-  padding: 30px clamp(24px, 3vw, 48px);
   background: var(--stage);
   color: #fff;
 }
@@ -201,26 +206,37 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
   background-size: 48px 48px;
 }
 
+/* Beschriftung und Messwerte liegen über dem Modell, nicht daneben. Damit
+   sie auf einem hellen Bauteil lesbar bleiben, bringen sie ihre eigene
+   Abdunklung mit, die zur Mitte hin ausläuft. Den Zeiger lassen sie
+   durch - sonst liesse sich das Modell an seinen Rändern nicht drehen. */
 .stage-label {
   position: relative;
   z-index: 1;
   display: flex;
   justify-content: space-between;
   gap: 16px;
+  padding: 26px clamp(24px, 3vw, 48px) 40px;
+  background: linear-gradient(var(--stage) 30%, #0b2e3300);
+  pointer-events: none;
   color: #9fb3b5;
   font: 500 10px "IBM Plex Mono", monospace;
 }
 
-/* Die Bühne nimmt den Platz, der zwischen Beschriftung und Messwerten übrig
-   bleibt – das Modell wächst also mit dem Fenster. Auf schmalen Anzeigen gibt
-   es keine Restfläche zu verteilen, dort trägt die Mindesthöhe. */
+/* Das Modell nimmt die ganze Bühne ein, von Kante zu Kante. Ein Rand um das
+   Zeichenfeld herum liesse es kleiner wirken, als der dunkle Grund verspricht;
+   die Bildeinpassung sorgt ohnehin dafür, dass nichts anstösst.
+
+   Die Zelle ist ausdrücklich auf die volle Fläche festgelegt. Bliebe sie auf
+   `auto`, richtete sie sich nach dem Zeichenfeld – und dessen Grösse kommt von
+   der Zelle. Aus dieser Rückkopplung wuchs das Feld über die Bühne hinaus. */
 .mouse-stage {
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   display: grid;
+  grid-template: 100% / 100%;
   place-items: center;
-  flex: 1 1 auto;
-  min-height: 0;
 }
 .mouse-svg { display: block; width: 100%; max-width: 240px; height: auto; }
 
@@ -229,13 +245,9 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .mouse-canvas, .mouse-svg { grid-area: 1 / 1; }
 .mouse-canvas {
   display: block;
+  place-self: stretch;
   width: 100%;
-  /* Hochformat, aber nicht beliebig schmal: In einer sehr hohen Fläche
-     begrenzt die Breite ohnehin, wie groß die Maus werden kann – der Rest
-     wäre leerer Rand. */
-  aspect-ratio: 4 / 5;
-  max-height: 100%;
-  min-height: 260px;
+  height: 100%;
   /* Ohne diese Zeile beantwortet der Browser das Ziehen mit Scrollen und
      der Zeigerlauf bricht mitten in der Drehung ab. */
   touch-action: none;
@@ -297,7 +309,15 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
   background: linear-gradient(var(--accent), transparent);
 }
 
-.stage-readout { position: relative; z-index: 1; display: grid; gap: 8px; }
+.stage-readout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  padding: 40px clamp(24px, 3vw, 48px) 26px;
+  background: linear-gradient(#0b2e3300, var(--stage) 55%);
+  pointer-events: none;
+}
 .stage-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 8px; border-top: 1px solid var(--stage-line); }
 .stage-line span { color: #9fb3b5; font: 500 10px "IBM Plex Mono", monospace; }
 .stage-line strong { display: inline-flex; align-items: center; gap: 8px; font: 600 15px "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
@@ -472,12 +492,12 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 }
 
 @media (max-width: 960px) {
-  .stage-shell { grid-template-columns: 1fr; min-height: 0; }
-  .device-stage { padding: 24px; }
+  .stage-shell { grid-template-columns: 1fr; min-height: 0; background: none; }
   .mouse-svg { max-width: 190px; }
-  /* Einspaltig steht die Bühne über den Messwerten. Ohne Deckel schöbe sie
-     die Zahlen aus dem Bild. */
-  .mouse-canvas { min-height: 300px; max-height: 58vh; }
+  /* Einspaltig steht die Bühne über den Messwerten. Da das Modell die Fläche
+     jetzt ausfüllt statt sie aufzuspannen, gibt erst diese Höhe ihr Mass –
+     und deckelt sie zugleich, damit die Zahlen darunter im Bild bleiben. */
+  .device-stage { height: 68vh; min-height: 380px; }
 }
 
 @media (max-width: 640px) {
