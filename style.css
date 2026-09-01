@@ -287,13 +287,14 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .model-label {
   position: absolute;
   z-index: 2;
-  transform: translate(-50%, calc(-100% - 42px));
-  padding: 7px 11px;
-  border-radius: 3px;
+  transform: translate(-50%, calc(-100% - 54px));
+  padding: 10px 16px;
+  border-radius: 4px;
   background: #04191a;
   border: 1px solid var(--accent);
   color: #eafcfa;
-  font: 600 12px "IBM Plex Mono", monospace;
+  font: 600 17px/1.2 "IBM Plex Mono", monospace;
+  letter-spacing: .02em;
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 6px 20px #0009;
@@ -304,7 +305,7 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
   left: 50%;
   top: 100%;
   width: 1px;
-  height: 34px;
+  height: 46px;
   margin-left: -1px;
   background: linear-gradient(var(--accent), transparent);
 }
