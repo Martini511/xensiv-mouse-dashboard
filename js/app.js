@@ -53,7 +53,37 @@ let configFromDevice = false;
 // beim Lesen nicht zurück - nur die Schwellwerte. Diese Notiz ist dann die
 // einzige Auskunft darüber, welcher Sensor im Gerät misst, und tritt beim
 // Laden an die Stelle der fehlenden Antwort.
-let writtenConfig = null;
+//
+// Sie überdauert deshalb Trennung und Neuladen der Seite. Als reine
+// Sitzungsnotiz wäre sie fast nie da, wenn man sie braucht: Beim Verbinden
+// steht sie noch auf nichts, und „Laden“ zeigte bis zum ersten Schreiben
+// immer nur die Annahme, es messe die Force-Sensorik. Genau das war das
+// Verhalten, das aussah, als funktioniere das Laden erst danach.
+const WRITTEN_STORE = "xensiv.tastenkonfiguration.geschrieben";
+let writtenConfig = recallWritten();
+
+function recallWritten() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WRITTEN_STORE));
+    // Was aus der Ablage kommt, hat niemand geprüft: eine ältere Fassung der
+    // Seite kann es geschrieben haben, ein anderer Reiter, eine fremde Hand.
+    return SENSOR_KEYS.every((key) => typeof saved?.[key]?.enabled === "boolean")
+      ? saved
+      : null;
+  } catch {
+    // Kein Speicher, kein Eintrag, kein gueltiges JSON - alles derselbe Fall.
+    return null;
+  }
+}
+
+function rememberWritten(config) {
+  writtenConfig = config;
+  try {
+    localStorage.setItem(WRITTEN_STORE, JSON.stringify(config));
+  } catch {
+    // Ohne Ablage gilt die Notiz eben nur für diese Sitzung.
+  }
+}
 
 const pressBars = new Map();
 
@@ -164,10 +194,10 @@ mouse.addEventListener("disconnected", () => {
   setConnectButton("Maus verbinden");
   batteryLabel.textContent = "--";
 
-  // Die Beobachtungen gelten nur für die abgelaufene Sitzung.
+  // Die Beobachtungen gelten nur für die abgelaufene Sitzung. Was in die
+  // Maus geschrieben wurde, steht dort weiter - die Notiz darüber bleibt.
   observedMax.clear();
   configFromDevice = false;
-  writtenConfig = null;
   wheelPressTrigger = 0;
 
   previewLed(byId("led-color").value);
@@ -738,7 +768,7 @@ byId("save-buttons").addEventListener("click", () => {
     // Ab jetzt steht das im Gerät. Beim Lesen erfährt man es nicht wieder,
     // deshalb diese Notiz - sie ist die einzige Auskunft darüber, welcher
     // Sensor dort tatsächlich misst.
-    writtenConfig = config;
+    rememberWritten(config);
   }, "Tasteneinstellungen gespeichert");
 });
 
