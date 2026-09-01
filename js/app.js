@@ -389,8 +389,12 @@ const LIVE_SENSORS = SENSOR_KEYS.filter((key) => key !== "leftTmr2d");
 // Je Taste misst genau ein Sensor. Welcher das ist, entscheidet allein die
 // Freigabe in der Konfiguration – und die stammt aus dem Gerät. Die
 // Live-Ansicht wählt hier nichts aus, sie liest die Einstellung nur ab.
+// Die Reihenfolge folgt dem Desktop-Werkzeug: Force hat Vorrang, Hall gilt
+// nur, wenn es allein freigegeben ist.
 function activeSensor(side) {
-  return byId(`${side}Hall-enabled`).checked ? `${side}Hall` : `${side}Force`;
+  const hall = byId(`${side}Hall-enabled`).checked;
+  const force = byId(`${side}Force-enabled`).checked;
+  return hall && !force ? `${side}Hall` : `${side}Force`;
 }
 
 // Der stillgelegte Sensor misst weiter, seine Werte lösen aber keine Taste
@@ -782,7 +786,23 @@ function populateButtonConfig(config) {
     if (bar) bar.threshold.textContent = config[key].threshold;
   });
 
+  assumeForce();
   showActiveSensors();
+}
+
+// Die Maus meldet beim Lesen nur die Schwellwerte zurück; das oberste Bit,
+// das den Sensor freigibt, bleibt in ihrer Antwort leer. Ohne Zutun stünde
+// danach jede Taste ohne Sensor da – ein Zustand, in dem sie gar nicht
+// auslösen würde und den die Maus offensichtlich nicht hat. Es gilt deshalb
+// dieselbe Annahme wie im Desktop-Werkzeug: Dann misst die Force-Sensorik.
+function assumeForce() {
+  ["left", "right"].forEach((side) => {
+    const enabled = SENSOR_KEYS
+      .filter((key) => key.startsWith(side))
+      .some((key) => byId(`${key}-enabled`).checked);
+
+    if (!enabled) byId(`${side}Force-enabled`).checked = true;
+  });
 }
 
 // ─── Radkalibrierung ──────────────────────────────────

@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=11">
+  <link rel="stylesheet" href="./style.css?v=12">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -283,7 +283,12 @@
           tats&auml;chlich erreicht, l&ouml;st die Taste am ganzen Rechner nicht mehr
           aus, auch nach dem Schlie&szlig;en dieser Seite. Die Freigabe entscheidet
           zugleich, welchem Sensor die Live-&Uuml;berwachung je Taste folgt; sie
-          zeigt die erreichbaren Werte.</p>        </div>
+          zeigt die erreichbaren Werte.</p>
+          <p class="hint">Beim Lesen meldet die Maus nur die Schwellwerte
+          zur&uuml;ck, nicht die Freigabe. Nach dem Laden steht deshalb Force,
+          solange nichts anderes bekannt ist &ndash; genau wie im
+          Desktop-Werkzeug. Beim Schreiben geht die Freigabe vollst&auml;ndig
+          ins Ger&auml;t.</p>        </div>
       </details>
 
       <details class="accordion" name="config" data-view="wheel">
@@ -333,16 +338,16 @@
       "imports": {
         "three": "./js/vendor/three.module.min.js",
         "three/addons/": "./js/vendor/addons/",
-        "./js/app.js": "./js/app.js?v=11",
-        "./js/bluetooth.js": "./js/bluetooth.js?v=11",
-        "./js/charts.js": "./js/charts.js?v=11",
-        "./js/model3d.js": "./js/model3d.js?v=11",
-        "./js/protocol.js": "./js/protocol.js?v=11",
-        "./js/webhid.js": "./js/webhid.js?v=11"
+        "./js/app.js": "./js/app.js?v=12",
+        "./js/bluetooth.js": "./js/bluetooth.js?v=12",
+        "./js/charts.js": "./js/charts.js?v=12",
+        "./js/model3d.js": "./js/model3d.js?v=12",
+        "./js/protocol.js": "./js/protocol.js?v=12",
+        "./js/webhid.js": "./js/webhid.js?v=12"
       }
     }
   </script>
-  <script type="module" src="./js/intro.js?v=11"></script>
-  <script type="module" src="./js/app.js?v=11"></script>
+  <script type="module" src="./js/intro.js?v=12"></script>
+  <script type="module" src="./js/app.js?v=12"></script>
 </body>
 </html>
