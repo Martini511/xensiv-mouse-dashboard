@@ -65,9 +65,15 @@ export class XensivMouseHid extends EventTarget {
     this.parked = false;
     this.reconnecting = false;
     this.reconnectTimer = null;
+    this.attempts = 0;
 
     navigator.hid?.addEventListener("disconnect", ({ device }) => {
-      if (device === this.device) this.handleDisconnect();
+      // Nicht auf Objektgleichheit pruefen. Chrome reicht im Ereignis nicht
+      // zwingend dasselbe HIDDevice herein, das wir halten - dann ginge der
+      // Vergleich ins Leere und der Verlust bliebe unbemerkt. Dass es unser
+      // Geraet ist und wir eines halten, genuegt.
+      trace("Ereignis: Geraet abgemeldet", describe(device));
+      if (this.device && isXensiv(device)) this.handleDisconnect();
     });
 
     // Meldet sich die Maus zurueck, laesst sie sich ohne erneuten
@@ -76,8 +82,14 @@ export class XensivMouseHid extends EventTarget {
     // erwartet, dass sie sich meldet - auch wenn beim Laden noch kein
     // Geraet freigegeben war und deshalb nie jemand gesucht hat.
     navigator.hid?.addEventListener("connect", ({ device }) => {
-      if (this.connected || this.parked || !isOurs(device)) return;
-      this.attach(device).catch(() => {});
+      trace("Ereignis: Geraet angemeldet", describe(device));
+
+      if (this.connected) return trace("  \u2192 uebergangen: schon verbunden");
+      if (this.parked) return trace("  \u2192 uebergangen: selbst getrennt");
+      if (!isOurs(device)) return trace("  \u2192 uebergangen: fremdes Geraet");
+
+      this.attach(device).catch(
+        (error) => trace("  \u2192 gescheitert:", error?.message || error));
     });
   }
 
@@ -251,6 +263,8 @@ export class XensivMouseHid extends EventTarget {
     if (this.reconnecting) return;
 
     this.reconnecting = true;
+    this.attempts = 0;
+    trace("Suche beginnt");
     this.dispatchEvent(new Event("reconnecting"));
     this.scheduleReconnect();
   }
@@ -268,13 +282,23 @@ export class XensivMouseHid extends EventTarget {
       this.reconnectTimer = null;
       if (!this.reconnecting) return;
 
+      this.attempts += 1;
+      this.dispatchEvent(new CustomEvent("attempt", {
+        detail: { attempt: this.attempts },
+      }));
+
       try {
-        await this.connectKnown();
+        const known = await this.knownDevices();
+        trace(`Anlauf ${this.attempts}: ${known.length} bekannte Geraete`,
+          known.map(describe));
+
+        if (known.length === 0) {
+          trace("  \u2192 nichts gefunden; das System kennt die Maus gerade nicht");
+        } else if (await this.connectKnown()) {
+          trace("  \u2192 verbunden");
+        }
       } catch (error) {
-        // Die Maus schläft noch – der nächste Anlauf folgt. Die Spur bleibt
-        // in der Konsole: Wenn das Wiederfinden doch einmal haengt, steht
-        // dort, woran es lag, statt dass man wieder raten muss.
-        console.debug("[XENSIV] Anlauf gescheitert:", error?.message || error);
+        trace("  \u2192 gescheitert:", error?.message || error);
       }
 
       if (this.reconnecting) this.scheduleReconnect();
@@ -282,6 +306,7 @@ export class XensivMouseHid extends EventTarget {
   }
 
   stopReconnect() {
+    if (this.reconnecting) trace("Suche endet");
     window.clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.reconnecting = false;
@@ -409,6 +434,21 @@ function withTimeout(promise, milliseconds = COMMAND_TIMEOUT) {
   return Promise.race([promise, new Promise((resolve, reject) => {
     window.setTimeout(() => reject(new Error(t("error.timeout"))), milliseconds);
   })]);
+}
+
+// Eine Spur der Verbindung in der Konsole. Sie steht auf `info`, nicht auf
+// `debug`: Was Chrome als "Verbose" einstuft, blendet die Konsole von sich
+// aus aus - und eine Diagnose, die man erst freischalten muss, hilft in dem
+// Moment nicht, in dem man sie braucht.
+function trace(...parts) {
+  console.info("[XENSIV]", ...parts);
+}
+
+function describe(device) {
+  if (!device) return "(keines)";
+  return `${device.productName || "?"} `
+    + `${device.vendorId?.toString(16)}:${device.productId?.toString(16)} `
+    + `offen=${device.opened} berichte=${device.collections?.length ?? "?"}`;
 }
 
 function isXensiv(device) {

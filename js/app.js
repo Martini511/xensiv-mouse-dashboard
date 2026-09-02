@@ -214,6 +214,14 @@ mouse.addEventListener("reconnecting", () => {
   notify(t("msg.asleep"));
 });
 
+// Der laufende Versuch steht im Kopf. Ohne ihn liesse sich "es sucht, findet
+// aber nichts" nicht von "es sucht gar nicht" unterscheiden - und genau
+// diese Unterscheidung braucht man, wenn etwas haengt.
+mouse.addEventListener("attempt", ({ detail }) => {
+  setConnectionState("waiting", null,
+    t("state.attempt", { attempt: detail.attempt }));
+});
+
 mouse.addEventListener("notice", ({ detail }) => {
   notify(detail.message, Boolean(detail.error));
 });
