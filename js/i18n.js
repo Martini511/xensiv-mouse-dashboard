@@ -147,9 +147,6 @@ const TEXTS = {
     "state.offline": "Not connected",
     "state.selecting": "Select mouse",
     "state.resetting": "Resetting",
-    "state.waiting": "Waiting for the mouse",
-    "state.attempt": "Waiting for the mouse \u00b7 try {attempt}",
-    "state.stopWaiting": "Stop waiting",
     "state.running": "Live monitoring running",
     "state.paused": "Live monitoring paused",
     "state.unsupported": "Not supported",
@@ -158,10 +155,9 @@ const TEXTS = {
     "msg.noTransport": "Neither WebHID nor Web Bluetooth is available. Please "
       + "use a current Chrome, Edge or Opera over HTTPS or localhost.",
     "msg.connected": "Mouse connected",
-    "msg.asleep": "The mouse has signed off \u2013 most likely sleep mode. Move "
-      + "the mouse; the connection restores itself.",
-    "msg.pickAgain": "The browser is no longer releasing the mouse to this "
-      + "page. Once it is awake again, a click on \u201cReconnect\u201d helps.",
+    "msg.lost": "The connection to the mouse was lost \u2013 most likely sleep "
+      + "mode. The browser does not release a mouse that has signed off "
+      + "again on its own; please connect anew.",
     "msg.configUnreadable": "Button configuration not readable: {error}. The "
       + "thresholds shown come from the presets.",
     "msg.ledSet": "LED set to {hex}",
@@ -197,7 +193,7 @@ const TEXTS = {
     "error.noneReleased": "No mouse has been released yet.",
     "error.notConnected": "The mouse is not connected",
     "error.timeout": "The mouse did not answer – most likely sleep mode",
-    "error.lostSilently": "Connection lost without an event",
+
     "error.payloadTooBig": "Payload does not fit into the feature report",
     "error.wrongLength": "Answer has {actual} instead of {expected} bytes",
     "error.wrongCommand": "Answer belongs to command {actual}, not {expected}",
@@ -337,9 +333,6 @@ const TEXTS = {
     "state.offline": "Nicht verbunden",
     "state.selecting": "Maus ausw\u00e4hlen",
     "state.resetting": "Wird zur\u00fcckgesetzt",
-    "state.waiting": "Warte auf die Maus",
-    "state.attempt": "Warte auf die Maus \u00b7 Versuch {attempt}",
-    "state.stopWaiting": "Warten beenden",
     "state.running": "Live-\u00dcberwachung l\u00e4uft",
     "state.paused": "Live-\u00dcberwachung angehalten",
     "state.unsupported": "Nicht unterst\u00fctzt",
@@ -349,10 +342,9 @@ const TEXTS = {
       + "Verf\u00fcgung. Bitte ein aktuelles Chrome, Edge oder Opera \u00fcber HTTPS "
       + "oder localhost nutzen.",
     "msg.connected": "Maus verbunden",
-    "msg.asleep": "Die Maus hat sich abgemeldet \u2013 vermutlich Ruhezustand. "
-      + "Bewegen Sie die Maus; die Verbindung stellt sich selbst wieder her.",
-    "msg.pickAgain": "Der Browser gibt die Maus dieser Seite nicht mehr frei. "
-      + "Sobald sie wieder wach ist, hilft ein Klick auf \u201eNeu verbinden\u201c.",
+    "msg.lost": "Die Verbindung zur Maus ist verloren \u2013 vermutlich "
+      + "Ruhezustand. Eine abgemeldete Maus gibt der Browser nicht von selbst "
+      + "wieder frei; bitte neu verbinden.",
     "msg.configUnreadable": "Tastenkonfiguration nicht lesbar: {error}. Die "
       + "angezeigten Schwellwerte stammen aus der Voreinstellung.",
     "msg.ledSet": "LED auf {hex} gesetzt",
@@ -388,7 +380,7 @@ const TEXTS = {
     "error.noneReleased": "Es ist noch keine Maus freigegeben.",
     "error.notConnected": "Die Maus ist nicht verbunden",
     "error.timeout": "Die Maus hat nicht geantwortet – vermutlich Ruhezustand",
-    "error.lostSilently": "Verbindung ohne Ereignis verloren",
+
     "error.payloadTooBig": "Nutzdaten passen nicht in den Feature-Report",
     "error.wrongLength": "Antwort hat {actual} statt {expected} Byte",
     "error.wrongCommand": "Antwort geh\u00f6rt zu Befehl {actual}, nicht {expected}",

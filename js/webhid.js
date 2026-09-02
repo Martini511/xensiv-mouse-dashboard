@@ -41,8 +41,6 @@ const STATUS_MESSAGES = [
   "status.3",
 ];
 
-const RECONNECT_INTERVAL = 2000;
-
 // Legt sich die Maus schlafen, bleibt ihr Geraeteknoten im System oft
 // bestehen: Das disconnect-Ereignis kommt dann nie, und eine Anfrage
 // verhallt einfach. Ohne Zeitlimit wartete die Seite darauf bis in alle
@@ -50,12 +48,18 @@ const RECONNECT_INTERVAL = 2000;
 // zehn Werten je Sekunde.
 const COMMAND_TIMEOUT = 2500;
 
-// Nach so vielen Anlaeufen ohne jedes Geraet im Zugriff ist weiteres Suchen
-// aussichtslos: Was der Browser dieser Seite nicht freigibt, findet auch der
-// zwanzigste Anlauf nicht. Etwa eine halbe Minute - lang genug, um einen
-// kurzen Aussetzer nicht vorschnell aufzugeben.
-const HOPELESS_AFTER = 8;
-
+// Eine Verbindung, kein Wiederverbinden.
+//
+// Der Versuch, eine verlorene Verbindung von selbst wiederherzustellen, ist
+// aufgegeben - und zwar aus einem Befund, nicht aus Bequemlichkeit: Wacht
+// die Maus aus dem Ruhezustand auf, gibt der Browser sie dieser Seite nicht
+// mehr frei. `getDevices()` bleibt leer, ein Anmelde-Ereignis kommt nicht.
+// Zurueckholen kann die Freigabe allein der Auswahldialog, und den oeffnet
+// der Browser ausschliesslich auf einen Klick hin. Jede Automatik davor
+// waere Beschaeftigung ohne Aussicht.
+//
+// Also das Ehrliche: Der Verlust wird sauber erkannt und gemeldet, die Seite
+// raeumt auf und steht bereit fuer eine neue Verbindung - einen Klick weit.
 export class XensivMouseHid extends EventTarget {
   constructor() {
     super();
@@ -65,59 +69,19 @@ export class XensivMouseHid extends EventTarget {
     // Warteschlange hält Anfrage und Antwort zusammen.
     this.transactionQueue = Promise.resolve();
 
-    // Hat der Nutzer selbst getrennt, bleibt es dabei - auch wenn die Maus
-    // spaeter wieder auftaucht. Dieser Merker ueberdauert das Trennen,
-    // anders als eine blosse Notiz "dieses Abmelden war gewollt".
-    this.parked = false;
-    this.reconnecting = false;
-    this.reconnectTimer = null;
-    this.attempts = 0;
-
-    // Laeuft gerade ein Anlauf? Waehrenddessen ist ein Geraet gesetzt und
-    // geoeffnet, ohne dass eine Verbindung besteht - und ohne diesen Merker
-    // sieht alles andere faelschlich eine.
+    // Laeuft gerade ein Verbindungsaufbau? Waehrenddessen ist ein Geraet
+    // gesetzt und geoeffnet, ohne dass eine Verbindung besteht - und ohne
+    // diesen Merker sieht alles andere faelschlich eine.
     this.attaching = false;
-    this.trying = false;
 
     navigator.hid?.addEventListener("disconnect", ({ device }) => {
       // Nicht auf Objektgleichheit pruefen. Chrome reicht im Ereignis nicht
       // zwingend dasselbe HIDDevice herein, das wir halten - dann ginge der
       // Vergleich ins Leere und der Verlust bliebe unbemerkt. Dass es unser
       // Geraet ist und wir eines halten, genuegt.
-      trace("Ereignis: Geraet abgemeldet", describe(device));
+      trace("Geraet abgemeldet", describe(device));
       if (this.device && isXensiv(device)) this.handleDisconnect();
     });
-
-    // Meldet sich die Maus zurueck, laesst sie sich ohne erneuten
-    // Auswahldialog oeffnen. Das gilt nicht nur waehrend eines laufenden
-    // Versuchs: Wer die Maus einsteckt, waehrend die Seite offen liegt,
-    // erwartet, dass sie sich meldet - auch wenn beim Laden noch kein
-    // Geraet freigegeben war und deshalb nie jemand gesucht hat.
-    navigator.hid?.addEventListener("connect", ({ device }) => {
-      trace("Ereignis: Geraet angemeldet", describe(device));
-
-      if (this.parked) return trace("  \u2192 uebergangen: selbst getrennt");
-      if (!isOurs(device)) return trace("  \u2192 uebergangen: fremdes Geraet");
-
-      // Sucht die Seite ohnehin, dann ist dieses Ereignis die beste
-      // Nachricht, die sie bekommen kann: Das Geraet ist wieder da. Der
-      // naechste Anlauf wird vorgezogen, statt den Takt abzuwarten.
-      if (this.reconnecting) {
-        trace("  \u2192 Anlauf wird vorgezogen");
-        return this.scheduleReconnect(0);
-      }
-      if (this.connected) return trace("  \u2192 uebergangen: schon verbunden");
-
-      this.attach(device).catch(
-        (error) => trace("  \u2192 gescheitert:", error?.message || error));
-    });
-
-    // Das An- und Abmelden meldet das System, nicht die Seite. Beim Laden
-    // ist die Maus in aller Regel laengst da - dann kommt keine Anmeldung,
-    // und das ist richtig so. Diese Zeile sagt trotzdem, dass gehorcht wird.
-    trace(navigator.hid
-      ? "WebHID bereit - horcht auf An- und Abmeldungen des Systems"
-      : "WebHID steht nicht zur Verfuegung");
   }
 
   get connected() {
@@ -134,9 +98,6 @@ export class XensivMouseHid extends EventTarget {
     if (!this.available) {
       throw new Error(t("error.noWebhid"));
     }
-
-    // Der Nutzer will verbinden - ein frueheres Trennen gilt nicht mehr.
-    this.parked = false;
 
     const devices = await navigator.hid.requestDevice({
       filters: [{ vendorId: XENSIV_VENDOR_ID, productId: XENSIV_PRODUCT_ID }],
@@ -180,12 +141,10 @@ export class XensivMouseHid extends EventTarget {
   }
 
   async attach(device) {
-    // Ein Griff, der vom vorigen Mal offen geblieben ist, taugt nach einem
-    // Verbindungsverlust nichts mehr. Das System hat das Geraet inzwischen
-    // neu angemeldet, der alte Griff zeigt ins Leere - `opened` sagt
-    // trotzdem ja. Wer sich darauf verlaesst, oeffnet nie wieder und fragt
-    // von da an ins Leere: Genau daran scheiterte das Wiederverbinden nach
-    // dem Ruhezustand. Deshalb zuerst schliessen, dann frisch oeffnen.
+    // Ein Griff, der vom vorigen Mal offen geblieben ist, taugt nichts mehr:
+    // Das System hat das Geraet inzwischen neu angemeldet, der alte Griff
+    // zeigt ins Leere - `opened` sagt trotzdem ja. Deshalb zuerst
+    // schliessen, dann frisch oeffnen.
     this.attaching = true;
     try {
       await closeQuietly(device);
@@ -195,10 +154,8 @@ export class XensivMouseHid extends EventTarget {
       // Ein geoeffneter Kanal ist noch keine Verbindung. Bei einer
       // schlafenden Funkmaus laesst sich der Geraeteknoten oeffnen, waehrend
       // die Funkstrecke aus ist - die Seite meldete dann "verbunden" und
-      // faende sich beim ersten Befehl wieder auf der Suche. Zwischen beidem
-      // im Sekundentakt hin und her zu springen waere schlimmer als gar
-      // nicht zu verbinden. Erst eine beantwortete Frage macht aus dem Kanal
-      // eine Verbindung.
+      // faende sich beim ersten Befehl wieder getrennt. Erst eine
+      // beantwortete Frage macht aus dem Kanal eine Verbindung.
       try {
         await this.command(COMMAND.getButtonConfig);
       } catch (error) {
@@ -213,7 +170,6 @@ export class XensivMouseHid extends EventTarget {
       this.attaching = false;
     }
 
-    this.stopReconnect("verbunden");
     trace("Verbunden:", describe(device));
 
     this.dispatchEvent(new CustomEvent("connected", {
@@ -225,22 +181,13 @@ export class XensivMouseHid extends EventTarget {
   // ─── Trennen und Freigeben ──────────────────────────
 
   disconnect() {
-    this.parked = true;
-    this.stopReconnect("vom Nutzer getrennt");
     closeQuietly(this.device);
-    this.handleDisconnect();
+    this.handleDisconnect(true);
   }
 
   // Beim Verlassen der Seite: Ein offener Report-Kanal blockiert den
   // nächsten Seitenaufruf, deshalb wird er ausdrücklich geschlossen.
-  //
-  // Was hier NICHT geschieht: parken. Das Ereignis kommt nicht nur beim
-  // wirklichen Verlassen - der Browser schickt es auch, wenn er die Seite
-  // nur beiseitelegt und spaeter wieder hervorholt. Wer hier parkt, ist
-  // danach dauerhaft taub: Die Suche steht, und selbst das Ereignis vom
-  // Aufwachen wird als "selbst getrennt" verworfen.
   release() {
-    this.stopReconnect("Seite beiseitegelegt");
     closeQuietly(this.device);
   }
 
@@ -255,26 +202,21 @@ export class XensivMouseHid extends EventTarget {
     // die Geste, die der Browser fuer den Auswahldialog verlangt.
     if (!device) return this.connect();
 
-    this.parked = false;
-    this.stopReconnect("Neuaufbau");
-
     try {
       if (device.opened) await device.close();
     } catch {
       // Kanal war ohnehin geschlossen
     }
 
-    // Dieses Abmelden geht von hier aus und darf keine Suche ausloesen -
-    // der Neuaufbau steht ja in derselben Funktion.
     this.handleDisconnect(true);
     await delay(600);
 
     await this.attach(device);
   }
 
-  // `expected` sagt, ob das Abmelden von hier ausging. Nur ein
+  // `expected` sagt, ob das Abmelden von hier ausging. Die Seite meldet nur
   // unerwartetes loest die Suche aus.
-  handleDisconnect(expected = this.parked) {
+  handleDisconnect(expected = false) {
     const device = this.device;
     // Ein gescheiterter Anlauf ist kein Verbindungsverlust: Es gab nie eine.
     // Sonst meldete die Seite alle paar Sekunden "getrennt" und schriebe
@@ -288,8 +230,12 @@ export class XensivMouseHid extends EventTarget {
     // sauber wieder her.
     closeQuietly(device);
 
-    if (wasConnected) this.dispatchEvent(new Event("disconnected"));
-    if (!expected) this.startReconnect();
+    if (wasConnected) {
+      trace(expected ? "Getrennt" : "Verbindung verloren");
+      this.dispatchEvent(new CustomEvent("disconnected", {
+        detail: { expected },
+      }));
+    }
   }
 
   // WebHID meldet das Abmelden zuverlässig über das disconnect-Ereignis;
@@ -298,102 +244,8 @@ export class XensivMouseHid extends EventTarget {
     if (this.device && !this.device.opened) this.handleDisconnect();
   }
 
-  // ─── Automatische Wiederverbindung ──────────────────
-
-  startReconnect() {
-    if (this.reconnecting) return;
-
-    this.reconnecting = true;
-    this.attempts = 0;
-    this.hopelessShown = false;
-    trace("Suche beginnt");
-    this.dispatchEvent(new Event("reconnecting"));
-    this.scheduleReconnect();
-  }
-
-  // Gibt der Browser ueber laengere Zeit gar kein Geraet frei, hilft kein
-  // weiteres Abtasten: Die Freigabe fuer diese Seite ist mit dem Geraet
-  // verschwunden, und zurueckholen kann sie nur der Auswahldialog - den
-  // wiederum oeffnet der Browser ausschliesslich auf einen Klick hin. Einmal
-  // darauf hinzuweisen ist ehrlicher, als stumm weiterzusuchen.
-  warnIfHopeless() {
-    if (this.hopelessShown || this.attempts < HOPELESS_AFTER) return;
-
-    this.hopelessShown = true;
-    this.dispatchEvent(new CustomEvent("notice", {
-      detail: { message: t("msg.pickAgain"), error: true },
-    }));
-  }
-
-  // Ein fester Takt taugt hier nicht. Ein Versuch dauert laenger als er,
-  // sobald er in das Zeitlimit laeuft - dann ueberholen sich die Versuche
-  // gegenseitig. Und weil jeder von ihnen das Geraet oeffnet, sieht der
-  // naechste eine offene Verbindung, haelt sie fuer bestehend und laesst es
-  // bleiben: Die Suche stand still, obwohl der Wecker lief. Der naechste
-  // Anlauf wird deshalb erst gestellt, wenn der vorige vorbei ist.
-  scheduleReconnect(pause = RECONNECT_INTERVAL) {
-    window.clearTimeout(this.reconnectTimer);
-
-    // Laeuft gerade ein Anlauf, waere ein zweiter danebengesetzt: Beide
-    // oeffneten dasselbe Geraet und faenden sich gegenseitig im Weg. Der
-    // laufende stellt den naechsten selbst.
-    if (this.trying) return;
-
-    this.reconnectTimer = window.setTimeout(async () => {
-      this.reconnectTimer = null;
-      if (!this.reconnecting || this.trying) return;
-
-      this.trying = true;
-      this.attempts += 1;
-      this.dispatchEvent(new CustomEvent("attempt", {
-        detail: { attempt: this.attempts },
-      }));
-
-      try {
-        // Roh und gefiltert getrennt ausweisen. Nur so laesst sich
-        // unterscheiden, ob der Browser uns gar nichts gibt oder ob wir
-        // etwas wegwerfen, das er uns gibt - zwei Befunde, die in ganz
-        // verschiedene Richtungen zeigen.
-        const alle = await navigator.hid.getDevices().catch(() => []);
-        const known = alle.filter(isOurs);
-        trace(`Anlauf ${this.attempts}: ${alle.length} im Zugriff,`
-          + ` davon ${known.length} unsere`, alle.map(describe));
-
-        if (alle.length === 0) {
-          trace("  \u2192 der Browser gibt dieser Seite gerade kein Geraet frei");
-          this.warnIfHopeless();
-        } else if (known.length === 0) {
-          trace("  \u2192 Geraete da, aber keines ist unsere Maus");
-        } else if (await this.connectKnown()) {
-          trace("  \u2192 verbunden");
-        }
-      } catch (error) {
-        trace("  \u2192 gescheitert:", error?.message || error);
-      } finally {
-        this.trying = false;
-      }
-
-      if (this.reconnecting) this.scheduleReconnect();
-    }, pause);
-  }
-
-  stopReconnect(reason = "ohne Angabe") {
-    if (this.reconnecting) trace("Suche endet:", reason);
-    window.clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    this.reconnecting = false;
-  }
-
   resume() {
     this.checkLink();
-
-    // Aus dem Hintergrund zurueck: nicht erst den Takt abwarten.
-    if (this.reconnecting) return this.scheduleReconnect(0);
-
-    // Wurde der Kanal beim Beiseitelegen freigegeben, steht die Seite jetzt
-    // ohne Verbindung und ohne Suche da. Wer nicht selbst getrennt hat,
-    // erwartet, dass sie sich wieder meldet.
-    if (!this.connected && !this.parked) this.startReconnect();
   }
 
   // ─── Gerätefunktionen ───────────────────────────────

@@ -33,7 +33,6 @@ export const UUIDS = Object.freeze({
 });
 
 const DEVICE_KEY = "xensiv.deviceId";
-const RECONNECT_DELAYS = [1000, 2000, 4000, 6000, 10000];
 const WATCHDOG_INTERVAL = 5000;
 
 export class XensivMouseBluetooth extends EventTarget {
@@ -42,17 +41,7 @@ export class XensivMouseBluetooth extends EventTarget {
     this.device = null;
     this.server = null;
     this.characteristics = new Map();
-
-    // Die Maus schaltet im Leerlauf ab. Ein Abbruch ist deshalb der
-    // Normalfall und kein Fehler – nur eine ausdrückliche Trennung
-    // durch die Bedienung beendet die Verbindung endgültig. Dieser Merker
-    // ueberdauert das Trennen: Sonst waere die Absicht des Nutzers nach
-    // einem Wimpernschlag wieder vergessen.
-    this.parked = false;
-    this.reconnecting = false;
     this.connecting = false;
-    this.reconnectTimer = null;
-    this.reconnectAttempts = 0;
 
     this.watchdog = window.setInterval(() => this.checkLink(), WATCHDOG_INTERVAL);
   }
@@ -71,9 +60,6 @@ export class XensivMouseBluetooth extends EventTarget {
     if (!this.available) {
       throw new Error(t("error.noBluetooth"));
     }
-
-    // Der Nutzer will verbinden - ein frueheres Trennen gilt nicht mehr.
-    this.parked = false;
 
     const device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "XENSIV" }],
@@ -114,7 +100,7 @@ export class XensivMouseBluetooth extends EventTarget {
     return device;
   }
 
-  async attach(device, { patient = false } = {}) {
+  async attach(device) {
     this.device = device;
     device.removeEventListener("gattserverdisconnected", this.onDrop);
     this.onDrop = () => this.handleDisconnect();
@@ -132,8 +118,7 @@ export class XensivMouseBluetooth extends EventTarget {
       this.characteristics.clear();
       this.server = null;
       safeDisconnect(device);
-      if (!patient) throw error;
-      return false;
+      throw error;
     } finally {
       this.connecting = false;
     }
@@ -173,18 +158,14 @@ export class XensivMouseBluetooth extends EventTarget {
   // ─── Trennen und Freigeben ──────────────────────────
 
   disconnect() {
-    this.parked = true;
-    this.stopReconnect();
     safeDisconnect(this.device);
-    this.handleDisconnect();
+    this.handleDisconnect(true);
   }
 
   // Beim Verlassen der Seite: Die Maus erlaubt nur eine Verbindung.
   // Bleibt ein Rest bestehen, weist sie jeden neuen Aufbau ab, bis sie
   // neu gestartet wird.
   release() {
-    this.parked = true;
-    this.stopReconnect();
     safeDisconnect(this.device);
   }
 
@@ -197,12 +178,7 @@ export class XensivMouseBluetooth extends EventTarget {
     // also fragen wir nach, statt in einer Sackgasse zu enden.
     if (!device) return this.connect();
 
-    this.parked = false;
-    this.stopReconnect();
     safeDisconnect(device);
-
-    // Dieses Abmelden geht von hier aus und darf keine Suche ausloesen -
-    // der Neuaufbau steht ja in derselben Funktion.
     this.handleDisconnect(true);
 
     // Der Maus Zeit geben, die alte Verbindung ihrerseits abzuräumen.
@@ -210,15 +186,19 @@ export class XensivMouseBluetooth extends EventTarget {
     await this.attach(device);
   }
 
-  // `expected` sagt, ob das Abmelden von hier ausging. Nur ein
-  // unerwartetes loest die Suche aus.
-  handleDisconnect(expected = this.parked) {
+  // `expected` sagt, ob das Abmelden von hier ausging. Gesucht wird danach
+  // nicht mehr - die Seite raeumt auf und steht bereit fuer eine neue
+  // Verbindung, wie im WebHID-Zweig.
+  handleDisconnect(expected = false) {
     const wasConnected = Boolean(this.server || this.characteristics.size);
     this.server = null;
     this.characteristics.clear();
 
-    if (wasConnected) this.dispatchEvent(new Event("disconnected"));
-    if (!expected && this.device) this.startReconnect();
+    if (wasConnected) {
+      this.dispatchEvent(new CustomEvent("disconnected", {
+        detail: { expected },
+      }));
+    }
   }
 
   // Chrome meldet den Verlust nicht in jedem Fall – besonders nicht,
@@ -227,69 +207,11 @@ export class XensivMouseBluetooth extends EventTarget {
     if (this.connecting || this.characteristics.size === 0) return;
     if (this.device?.gatt?.connected) return;
 
-    this.dispatchEvent(new CustomEvent("notice", {
-      detail: { message: t("error.lostSilently") },
-    }));
     this.handleDisconnect();
   }
 
-  // ─── Automatische Wiederverbindung ──────────────────
-
-  startReconnect() {
-    if (this.reconnecting) return;
-
-    this.reconnecting = true;
-    this.reconnectAttempts = 0;
-    this.dispatchEvent(new Event("reconnecting"));
-
-    // Direkt im Trennungsereignis lehnt Windows einen neuen
-    // Verbindungswunsch gelegentlich ab – kurz durchatmen.
-    this.reconnectTimer = window.setTimeout(() => this.attemptReconnect(), 800);
-  }
-
-  stopReconnect() {
-    window.clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    this.reconnectAttempts = 0;
-
-    const wasConnecting = this.connecting;
-    this.reconnecting = false;
-
-    // Einen noch offenen Verbindungswunsch aktiv abräumen, sonst
-    // verbindet sich die Maus später unbemerkt im Hintergrund.
-    if (wasConnecting && !this.connected) safeDisconnect(this.device);
-  }
-
-  async attemptReconnect() {
-    if (!this.reconnecting || !this.device || this.connecting) return;
-
-    this.reconnectTimer = null;
-    this.reconnectAttempts += 1;
-
-    const connected = await this.attach(this.device, { patient: true });
-
-    if (!this.reconnecting) return;
-
-    if (connected) {
-      this.reconnecting = false;
-      this.reconnectAttempts = 0;
-      return;
-    }
-
-    const index = Math.min(this.reconnectAttempts, RECONNECT_DELAYS.length - 1);
-    this.reconnectTimer = window.setTimeout(
-      () => this.attemptReconnect(), RECONNECT_DELAYS[index]);
-  }
-
-  // Im Hintergrund drosselt der Browser alle Zeitgeber stark. Wird die
-  // Seite wieder sichtbar, lohnt ein sofortiger Anlauf.
   resume() {
     this.checkLink();
-    if (this.reconnecting && !this.connecting) {
-      window.clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-      this.attemptReconnect();
-    }
   }
 
   // ─── Gerätefunktionen ───────────────────────────────

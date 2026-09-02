@@ -120,7 +120,7 @@ function liveTabActive() {
 // ─── Verbindung ───────────────────────────────────────
 
 connectButton.addEventListener("click", async () => {
-  if (mouse.connected || mouse.reconnecting) {
+  if (mouse.connected) {
     mouse.disconnect();
     return;
   }
@@ -188,7 +188,7 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
   if (liveTabActive()) startMonitoring();
 });
 
-mouse.addEventListener("disconnected", () => {
+mouse.addEventListener("disconnected", ({ detail }) => {
   stopMonitoring();
   window.clearInterval(batteryTimer);
   batteryTimer = null;
@@ -196,6 +196,12 @@ mouse.addEventListener("disconnected", () => {
   setConnectionState("offline", "state.offline");
   setConnectButton("header.connect");
   batteryLabel.textContent = "--";
+
+  // Die Seite steht ab hier bereit fuer eine neue Verbindung, nicht fuer
+  // die Fortsetzung der alten. Der Knopf zum Neuaufbau gehoert deshalb
+  // weg - er wuerde dasselbe tun wie "Maus verbinden", nur mit einem
+  // Namen, der etwas anderes verspricht.
+  resetButton.hidden = true;
 
   // Die Beobachtungen gelten nur für die abgelaufene Sitzung. Was in die
   // Maus geschrieben wurde, steht dort weiter - die Notiz darüber bleibt.
@@ -205,21 +211,11 @@ mouse.addEventListener("disconnected", () => {
 
   previewLed(byId("led-color").value);
   resetLiveReadouts();
-});
 
-mouse.addEventListener("reconnecting", () => {
-  setConnectionState("waiting", "state.waiting");
-  setConnectButton("state.stopWaiting");
-  resetButton.hidden = false;
-  notify(t("msg.asleep"));
-});
-
-// Der laufende Versuch steht im Kopf. Ohne ihn liesse sich "es sucht, findet
-// aber nichts" nicht von "es sucht gar nicht" unterscheiden - und genau
-// diese Unterscheidung braucht man, wenn etwas haengt.
-mouse.addEventListener("attempt", ({ detail }) => {
-  setConnectionState("waiting", null,
-    t("state.attempt", { attempt: detail.attempt }));
+  // Ein gewolltes Trennen braucht keine Meldung - der Nutzer hat es eben
+  // selbst veranlasst. Ein Verlust schon: Sonst stuende die Seite ohne
+  // Erklaerung auf "Nicht verbunden".
+  if (!detail?.expected) notify(t("msg.lost"), true);
 });
 
 mouse.addEventListener("notice", ({ detail }) => {
@@ -306,10 +302,10 @@ async function monitorLoop() {
       }
     } catch (error) {
       stopMonitoring();
-      // Ist die Verbindung verloren, sagt das der Transport schon selbst
-      // und sucht bereits. Eine zweite, scharfe Meldung daneben stünde nur
-      // im Weg – der Hinweis auf den Ruhezustand steht ja schon da.
-      if (!mouse.reconnecting) showError(error);
+      // Ist die Verbindung verloren, hat der Transport das schon gemeldet
+      // und die Seite aufgeraeumt. Eine zweite, scharfe Meldung daneben
+      // stuende nur im Weg.
+      if (mouse.connected) showError(error);
       return;
     }
 
@@ -1152,19 +1148,18 @@ if (!mouse.available) {
   setConnectionState("offline", "state.unsupported");
   notify(t("msg.noTransport"), true);
 } else {
+  // Ein einziger Versuch beim Laden: Haelt der Browser die Freigabe von
+  // einem frueheren Besuch noch, spart das den Klick. Scheitert er, bleibt
+  // es dabei - die Seite steht dann bereit, und der Knopf tut den Rest.
   mouse.knownDevices().then(async (devices) => {
     if (devices.length === 0) return;
 
-    resetButton.hidden = false;
     setConnectionState("searching", "state.autoConnect");
 
     try {
       await mouse.connectKnown();
     } catch {
-      // Der erste Anlauf schlägt fehl, solange der Browser den alten
-      // Zugriff noch abbaut oder die Maus schläft. Statt aufzugeben
-      // wird geduldig weiterprobiert.
-      mouse.startReconnect();
+      setConnectionState("offline", "state.offline");
     }
   });
 }
