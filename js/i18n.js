@@ -160,6 +160,8 @@ const TEXTS = {
     "msg.connected": "Mouse connected",
     "msg.asleep": "The mouse has signed off \u2013 most likely sleep mode. Move "
       + "the mouse; the connection restores itself.",
+    "msg.pickAgain": "The browser is no longer releasing the mouse to this "
+      + "page. Once it is awake again, a click on \u201cReconnect\u201d helps.",
     "msg.configUnreadable": "Button configuration not readable: {error}. The "
       + "thresholds shown come from the presets.",
     "msg.ledSet": "LED set to {hex}",
@@ -349,6 +351,8 @@ const TEXTS = {
     "msg.connected": "Maus verbunden",
     "msg.asleep": "Die Maus hat sich abgemeldet \u2013 vermutlich Ruhezustand. "
       + "Bewegen Sie die Maus; die Verbindung stellt sich selbst wieder her.",
+    "msg.pickAgain": "Der Browser gibt die Maus dieser Seite nicht mehr frei. "
+      + "Sobald sie wieder wach ist, hilft ein Klick auf \u201eNeu verbinden\u201c.",
     "msg.configUnreadable": "Tastenkonfiguration nicht lesbar: {error}. Die "
       + "angezeigten Schwellwerte stammen aus der Voreinstellung.",
     "msg.ledSet": "LED auf {hex} gesetzt",

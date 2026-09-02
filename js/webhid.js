@@ -50,6 +50,12 @@ const RECONNECT_INTERVAL = 2000;
 // zehn Werten je Sekunde.
 const COMMAND_TIMEOUT = 2500;
 
+// Nach so vielen Anlaeufen ohne jedes Geraet im Zugriff ist weiteres Suchen
+// aussichtslos: Was der Browser dieser Seite nicht freigibt, findet auch der
+// zwanzigste Anlauf nicht. Etwa eine halbe Minute - lang genug, um einen
+// kurzen Aussetzer nicht vorschnell aufzugeben.
+const HOPELESS_AFTER = 8;
+
 export class XensivMouseHid extends EventTarget {
   constructor() {
     super();
@@ -299,9 +305,24 @@ export class XensivMouseHid extends EventTarget {
 
     this.reconnecting = true;
     this.attempts = 0;
+    this.hopelessShown = false;
     trace("Suche beginnt");
     this.dispatchEvent(new Event("reconnecting"));
     this.scheduleReconnect();
+  }
+
+  // Gibt der Browser ueber laengere Zeit gar kein Geraet frei, hilft kein
+  // weiteres Abtasten: Die Freigabe fuer diese Seite ist mit dem Geraet
+  // verschwunden, und zurueckholen kann sie nur der Auswahldialog - den
+  // wiederum oeffnet der Browser ausschliesslich auf einen Klick hin. Einmal
+  // darauf hinzuweisen ist ehrlicher, als stumm weiterzusuchen.
+  warnIfHopeless() {
+    if (this.hopelessShown || this.attempts < HOPELESS_AFTER) return;
+
+    this.hopelessShown = true;
+    this.dispatchEvent(new CustomEvent("notice", {
+      detail: { message: t("msg.pickAgain"), error: true },
+    }));
   }
 
   // Ein fester Takt taugt hier nicht. Ein Versuch dauert laenger als er,
@@ -329,12 +350,20 @@ export class XensivMouseHid extends EventTarget {
       }));
 
       try {
-        const known = await this.knownDevices();
-        trace(`Anlauf ${this.attempts}: ${known.length} bekannte Geraete`,
-          known.map(describe));
+        // Roh und gefiltert getrennt ausweisen. Nur so laesst sich
+        // unterscheiden, ob der Browser uns gar nichts gibt oder ob wir
+        // etwas wegwerfen, das er uns gibt - zwei Befunde, die in ganz
+        // verschiedene Richtungen zeigen.
+        const alle = await navigator.hid.getDevices().catch(() => []);
+        const known = alle.filter(isOurs);
+        trace(`Anlauf ${this.attempts}: ${alle.length} im Zugriff,`
+          + ` davon ${known.length} unsere`, alle.map(describe));
 
-        if (known.length === 0) {
-          trace("  \u2192 nichts gefunden; das System kennt die Maus gerade nicht");
+        if (alle.length === 0) {
+          trace("  \u2192 der Browser gibt dieser Seite gerade kein Geraet frei");
+          this.warnIfHopeless();
+        } else if (known.length === 0) {
+          trace("  \u2192 Geraete da, aber keines ist unsere Maus");
         } else if (await this.connectKnown()) {
           trace("  \u2192 verbunden");
         }
