@@ -52,7 +52,10 @@ export class XensivMouseHid extends EventTarget {
     // Warteschlange hält Anfrage und Antwort zusammen.
     this.transactionQueue = Promise.resolve();
 
-    this.userDisconnect = false;
+    // Hat der Nutzer selbst getrennt, bleibt es dabei - auch wenn die Maus
+    // spaeter wieder auftaucht. Dieser Merker ueberdauert das Trennen,
+    // anders als eine blosse Notiz "dieses Abmelden war gewollt".
+    this.parked = false;
     this.reconnecting = false;
     this.reconnectTimer = null;
 
@@ -60,10 +63,14 @@ export class XensivMouseHid extends EventTarget {
       if (device === this.device) this.handleDisconnect();
     });
 
-    // Meldet sich die Maus nach dem Ruhezustand zurück, lässt sie sich
-    // ohne erneuten Auswahldialog öffnen.
+    // Meldet sich die Maus zurueck, laesst sie sich ohne erneuten
+    // Auswahldialog oeffnen. Das gilt nicht nur waehrend eines laufenden
+    // Versuchs: Wer die Maus einsteckt, waehrend die Seite offen liegt,
+    // erwartet, dass sie sich meldet - auch wenn beim Laden noch kein
+    // Geraet freigegeben war und deshalb nie jemand gesucht hat.
     navigator.hid?.addEventListener("connect", ({ device }) => {
-      if (!this.reconnecting || !isXensiv(device)) return;
+      if (this.connected || this.parked) return;
+      if (!isXensiv(device) || !hasConfigurationReport(device)) return;
       this.attach(device).catch(() => {});
     });
   }
@@ -82,6 +89,9 @@ export class XensivMouseHid extends EventTarget {
     if (!this.available) {
       throw new Error(t("error.noWebhid"));
     }
+
+    // Der Nutzer will verbinden - ein frueheres Trennen gilt nicht mehr.
+    this.parked = false;
 
     const devices = await navigator.hid.requestDevice({
       filters: [{ vendorId: XENSIV_VENDOR_ID, productId: XENSIV_PRODUCT_ID }],
@@ -125,7 +135,6 @@ export class XensivMouseHid extends EventTarget {
     if (!device.opened) await device.open();
 
     this.stopReconnect();
-    this.userDisconnect = false;
 
     this.dispatchEvent(new CustomEvent("connected", {
       detail: { name: device.productName || "XENSIV Maus" },
@@ -136,7 +145,7 @@ export class XensivMouseHid extends EventTarget {
   // ─── Trennen und Freigeben ──────────────────────────
 
   disconnect() {
-    this.userDisconnect = true;
+    this.parked = true;
     this.stopReconnect();
     closeQuietly(this.device);
     this.handleDisconnect();
@@ -145,7 +154,7 @@ export class XensivMouseHid extends EventTarget {
   // Beim Verlassen der Seite: Ein offener Report-Kanal blockiert den
   // nächsten Seitenaufruf, deshalb wird er ausdrücklich geschlossen.
   release() {
-    this.userDisconnect = true;
+    this.parked = true;
     this.stopReconnect();
     closeQuietly(this.device);
   }
@@ -155,7 +164,7 @@ export class XensivMouseHid extends EventTarget {
     const device = this.device || (await this.knownDevices())[0];
     if (!device) throw new Error(t("error.noneReleased"));
 
-    this.userDisconnect = true;
+    this.parked = false;
     this.stopReconnect();
 
     try {
@@ -164,22 +173,23 @@ export class XensivMouseHid extends EventTarget {
       // Kanal war ohnehin geschlossen
     }
 
-    this.handleDisconnect();
+    // Dieses Abmelden geht von hier aus und darf keine Suche ausloesen -
+    // der Neuaufbau steht ja in derselben Funktion.
+    this.handleDisconnect(true);
     await delay(600);
 
-    this.userDisconnect = false;
     await this.attach(device);
   }
 
-  handleDisconnect() {
+  // `expected` sagt, ob das Abmelden von hier ausging. Nur ein
+  // unerwartetes loest die Suche aus.
+  handleDisconnect(expected = this.parked) {
     const wasConnected = Boolean(this.device);
     this.device = null;
     this.transactionQueue = Promise.resolve();
 
     if (wasConnected) this.dispatchEvent(new Event("disconnected"));
-
-    if (!this.userDisconnect) this.startReconnect();
-    this.userDisconnect = false;
+    if (!expected) this.startReconnect();
   }
 
   // WebHID meldet das Abmelden zuverlässig über das disconnect-Ereignis;

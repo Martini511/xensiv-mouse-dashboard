@@ -45,8 +45,10 @@ export class XensivMouseBluetooth extends EventTarget {
 
     // Die Maus schaltet im Leerlauf ab. Ein Abbruch ist deshalb der
     // Normalfall und kein Fehler – nur eine ausdrückliche Trennung
-    // durch die Bedienung beendet die Verbindung endgültig.
-    this.userDisconnect = false;
+    // durch die Bedienung beendet die Verbindung endgültig. Dieser Merker
+    // ueberdauert das Trennen: Sonst waere die Absicht des Nutzers nach
+    // einem Wimpernschlag wieder vergessen.
+    this.parked = false;
     this.reconnecting = false;
     this.connecting = false;
     this.reconnectTimer = null;
@@ -69,6 +71,9 @@ export class XensivMouseBluetooth extends EventTarget {
     if (!this.available) {
       throw new Error(t("error.noBluetooth"));
     }
+
+    // Der Nutzer will verbinden - ein frueheres Trennen gilt nicht mehr.
+    this.parked = false;
 
     const device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "XENSIV" }],
@@ -134,7 +139,6 @@ export class XensivMouseBluetooth extends EventTarget {
     }
 
     writePreferredId(device.id);
-    this.userDisconnect = false;
     this.dispatchEvent(new CustomEvent("connected", { detail: device }));
     return true;
   }
@@ -169,7 +173,7 @@ export class XensivMouseBluetooth extends EventTarget {
   // ─── Trennen und Freigeben ──────────────────────────
 
   disconnect() {
-    this.userDisconnect = true;
+    this.parked = true;
     this.stopReconnect();
     safeDisconnect(this.device);
     this.handleDisconnect();
@@ -179,7 +183,7 @@ export class XensivMouseBluetooth extends EventTarget {
   // Bleibt ein Rest bestehen, weist sie jeden neuen Aufbau ab, bis sie
   // neu gestartet wird.
   release() {
-    this.userDisconnect = true;
+    this.parked = true;
     this.stopReconnect();
     safeDisconnect(this.device);
   }
@@ -189,26 +193,28 @@ export class XensivMouseBluetooth extends EventTarget {
     const device = this.device || (await this.knownDevices())[0];
     if (!device) throw new Error(t("error.noneReleased"));
 
-    this.userDisconnect = true;
+    this.parked = false;
     this.stopReconnect();
     safeDisconnect(device);
-    this.handleDisconnect();
+
+    // Dieses Abmelden geht von hier aus und darf keine Suche ausloesen -
+    // der Neuaufbau steht ja in derselben Funktion.
+    this.handleDisconnect(true);
 
     // Der Maus Zeit geben, die alte Verbindung ihrerseits abzuräumen.
     await delay(1500);
-    this.userDisconnect = false;
     await this.attach(device);
   }
 
-  handleDisconnect() {
+  // `expected` sagt, ob das Abmelden von hier ausging. Nur ein
+  // unerwartetes loest die Suche aus.
+  handleDisconnect(expected = this.parked) {
     const wasConnected = Boolean(this.server || this.characteristics.size);
     this.server = null;
     this.characteristics.clear();
 
     if (wasConnected) this.dispatchEvent(new Event("disconnected"));
-
-    if (!this.userDisconnect && this.device) this.startReconnect();
-    this.userDisconnect = false;
+    if (!expected && this.device) this.startReconnect();
   }
 
   // Chrome meldet den Verlust nicht in jedem Fall – besonders nicht,
