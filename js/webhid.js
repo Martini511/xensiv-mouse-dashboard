@@ -67,6 +67,12 @@ export class XensivMouseHid extends EventTarget {
     this.reconnectTimer = null;
     this.attempts = 0;
 
+    // Laeuft gerade ein Anlauf? Waehrenddessen ist ein Geraet gesetzt und
+    // geoeffnet, ohne dass eine Verbindung besteht - und ohne diesen Merker
+    // sieht alles andere faelschlich eine.
+    this.attaching = false;
+    this.trying = false;
+
     navigator.hid?.addEventListener("disconnect", ({ device }) => {
       // Nicht auf Objektgleichheit pruefen. Chrome reicht im Ereignis nicht
       // zwingend dasselbe HIDDevice herein, das wir halten - dann ginge der
@@ -84,9 +90,17 @@ export class XensivMouseHid extends EventTarget {
     navigator.hid?.addEventListener("connect", ({ device }) => {
       trace("Ereignis: Geraet angemeldet", describe(device));
 
-      if (this.connected) return trace("  \u2192 uebergangen: schon verbunden");
       if (this.parked) return trace("  \u2192 uebergangen: selbst getrennt");
       if (!isOurs(device)) return trace("  \u2192 uebergangen: fremdes Geraet");
+
+      // Sucht die Seite ohnehin, dann ist dieses Ereignis die beste
+      // Nachricht, die sie bekommen kann: Das Geraet ist wieder da. Der
+      // naechste Anlauf wird vorgezogen, statt den Takt abzuwarten.
+      if (this.reconnecting) {
+        trace("  \u2192 Anlauf wird vorgezogen");
+        return this.scheduleReconnect(0);
+      }
+      if (this.connected) return trace("  \u2192 uebergangen: schon verbunden");
 
       this.attach(device).catch(
         (error) => trace("  \u2192 gescheitert:", error?.message || error));
@@ -94,7 +108,7 @@ export class XensivMouseHid extends EventTarget {
   }
 
   get connected() {
-    return Boolean(this.device?.opened);
+    return Boolean(this.device?.opened) && !this.attaching;
   }
 
   get available() {
@@ -159,26 +173,31 @@ export class XensivMouseHid extends EventTarget {
     // trotzdem ja. Wer sich darauf verlaesst, oeffnet nie wieder und fragt
     // von da an ins Leere: Genau daran scheiterte das Wiederverbinden nach
     // dem Ruhezustand. Deshalb zuerst schliessen, dann frisch oeffnen.
-    await closeQuietly(device);
-    await device.open();
-    this.device = device;
-
-    // Ein geoeffneter Kanal ist noch keine Verbindung. Bei einer
-    // schlafenden Funkmaus laesst sich der Geraeteknoten oeffnen, waehrend
-    // die Funkstrecke aus ist - die Seite meldete dann "verbunden" und
-    // faende sich beim ersten Befehl wieder auf der Suche. Zwischen beidem
-    // im Sekundentakt hin und her zu springen waere schlimmer als gar
-    // nicht zu verbinden. Erst eine beantwortete Frage macht aus dem Kanal
-    // eine Verbindung.
+    this.attaching = true;
     try {
-      await this.command(COMMAND.getButtonConfig);
-    } catch (error) {
-      // Kam die Antwort gar nicht, hat `transfer` schon aufgeraeumt und
-      // das Geraet abgeraeumt - dann ist der Versuch gescheitert. Ein
-      // Protokollfehler dagegen *ist* eine Antwort: Die Maus ist da, nur
-      // ihre Firmware ist anderer Meinung. Das steht der Verbindung nicht
-      // im Weg.
-      if (!this.device) throw error;
+      await closeQuietly(device);
+      await device.open();
+      this.device = device;
+
+      // Ein geoeffneter Kanal ist noch keine Verbindung. Bei einer
+      // schlafenden Funkmaus laesst sich der Geraeteknoten oeffnen, waehrend
+      // die Funkstrecke aus ist - die Seite meldete dann "verbunden" und
+      // faende sich beim ersten Befehl wieder auf der Suche. Zwischen beidem
+      // im Sekundentakt hin und her zu springen waere schlimmer als gar
+      // nicht zu verbinden. Erst eine beantwortete Frage macht aus dem Kanal
+      // eine Verbindung.
+      try {
+        await this.command(COMMAND.getButtonConfig);
+      } catch (error) {
+        // Kam die Antwort gar nicht, hat `transfer` schon aufgeraeumt und
+        // das Geraet abgeraeumt - dann ist der Versuch gescheitert. Ein
+        // Protokollfehler dagegen *ist* eine Antwort: Die Maus ist da, nur
+        // ihre Firmware ist anderer Meinung. Das steht der Verbindung nicht
+        // im Weg.
+        if (!this.device) throw error;
+      }
+    } finally {
+      this.attaching = false;
     }
 
     this.stopReconnect();
@@ -238,7 +257,10 @@ export class XensivMouseHid extends EventTarget {
   // unerwartetes loest die Suche aus.
   handleDisconnect(expected = this.parked) {
     const device = this.device;
-    const wasConnected = Boolean(device);
+    // Ein gescheiterter Anlauf ist kein Verbindungsverlust: Es gab nie eine.
+    // Sonst meldete die Seite alle paar Sekunden "getrennt" und schriebe
+    // ihre eigene Suchanzeige mit "Nicht verbunden" wieder zu.
+    const wasConnected = Boolean(device) && !this.attaching;
     this.device = null;
     this.transactionQueue = Promise.resolve();
 
@@ -278,10 +300,16 @@ export class XensivMouseHid extends EventTarget {
   scheduleReconnect(pause = RECONNECT_INTERVAL) {
     window.clearTimeout(this.reconnectTimer);
 
+    // Laeuft gerade ein Anlauf, waere ein zweiter danebengesetzt: Beide
+    // oeffneten dasselbe Geraet und faenden sich gegenseitig im Weg. Der
+    // laufende stellt den naechsten selbst.
+    if (this.trying) return;
+
     this.reconnectTimer = window.setTimeout(async () => {
       this.reconnectTimer = null;
-      if (!this.reconnecting) return;
+      if (!this.reconnecting || this.trying) return;
 
+      this.trying = true;
       this.attempts += 1;
       this.dispatchEvent(new CustomEvent("attempt", {
         detail: { attempt: this.attempts },
@@ -299,6 +327,8 @@ export class XensivMouseHid extends EventTarget {
         }
       } catch (error) {
         trace("  \u2192 gescheitert:", error?.message || error);
+      } finally {
+        this.trying = false;
       }
 
       if (this.reconnecting) this.scheduleReconnect();
@@ -370,7 +400,10 @@ export class XensivMouseHid extends EventTarget {
   }
 
   async executeCommand(command, payload) {
-    if (!this.connected) throw new Error(t("error.notConnected"));
+    // Gefragt ist hier das Geraet, nicht die Verbindung: Waehrend eines
+    // Anlaufs gilt sie noch nicht als bestehend, und gerade dann muss die
+    // Probe hindurch, die sie erst beweist.
+    if (!this.device) throw new Error(t("error.notConnected"));
 
     if (payload.byteLength > REPORT_SIZE - 2) {
       throw new Error(t("error.payloadTooBig"));
