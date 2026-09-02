@@ -1,8 +1,8 @@
 import { XensivMouseHid } from "./webhid.js";
 import { XensivMouseBluetooth } from "./bluetooth.js";
 import { WheelCharts } from "./charts.js";
-import { MouseModel } from "./model3d.js";
-import { SENSOR_KEYS, sensorLabel } from "./protocol.js";
+import { MouseModel, pressColor } from "./model3d.js";
+import { PRESS_MAX, SENSOR_KEYS, sensorLabel } from "./protocol.js";
 import { LANGUAGES, language, onLanguage, setLanguage, t, translate }
   from "./i18n.js";
 
@@ -37,11 +37,12 @@ const MIN_IDLE = 5;
 let monitoring = false;
 let batteryTimer = null;
 
-// Die Sensoren liefern deutlich kleinere Werte als die möglichen 127.
-// Die Balken würden sonst kaum ausschlagen, deshalb wächst die Skala
-// mit dem größten bisher gesehenen Wert mit.
-const PRESS_SCALE_MIN = 24;
-let pressScale = PRESS_SCALE_MIN;
+// Die Balken reichen bis zum groessten Wert, den ein Sensor ueberhaupt melden
+// kann. Frueher wuchs die Skala mit dem bisher gesehenen Hoechstwert mit,
+// damit die kleinen Ausschlaege sichtbar wurden - dafuer bedeutete dieselbe
+// Balkenlaenge zu zwei Zeitpunkten zwei verschiedene Kraefte, und ein einziger
+// harter Druck stauchte alles Folgende. Eine feste Skala bleibt vergleichbar.
+const PRESS_SCALE = PRESS_MAX;
 
 // Höchster je Sensor beobachteter Druck. Dient als Plausibilitätsprobe
 // vor dem Schreiben: Eine Schwelle oberhalb davon macht die Taste
@@ -434,7 +435,7 @@ function buildPressBars() {
         <div class="press-fill" data-role="fill"></div>
         <div class="press-marker" data-role="marker"></div>
       </div>
-      <div class="press-scale"><span>0</span><span data-role="scale">${PRESS_SCALE_MIN}</span></div>`;
+      <div class="press-scale"><span>0</span><span>${PRESS_SCALE}</span></div>`;
 
     list.appendChild(item);
     pressBars.set(key, {
@@ -443,7 +444,6 @@ function buildPressBars() {
       threshold: item.querySelector('[data-role="threshold"]'),
       fill: item.querySelector('[data-role="fill"]'),
       marker: item.querySelector('[data-role="marker"]'),
-      scale: item.querySelector('[data-role="scale"]'),
     });
   });
 }
@@ -550,10 +550,6 @@ function keepSingleSensor(key) {
 }
 
 function showPressure(values) {
-  // Skala zuerst nachziehen, sonst bezögen sich die Balken eines
-  // Durchlaufs auf zwei verschiedene Bezugsgrößen.
-  pressScale = Math.max(pressScale, ...SHOWN_SENSORS.map((key) => values[key]));
-
   const active = {
     left: activeSensor("left"),
     right: activeSensor("right"),
@@ -563,25 +559,39 @@ function showPressure(values) {
     const bar = pressBars.get(key);
     const pressure = values[key];
     const threshold = thresholdOf(key);
+    const tripped = isPressed(values, key);
 
     observedMax.set(key, Math.max(observedMax.get(key) || 0, pressure));
 
     bar.value.textContent = pressure;
     bar.threshold.textContent = threshold;
-    bar.scale.textContent = pressScale;
     bar.fill.style.width = `${percentOfScale(pressure)}%`;
+    bar.fill.style.setProperty("--press-tone",
+      pressColor(pressShare(pressure, threshold, tripped), tripped));
     bar.marker.style.left = `${percentOfScale(threshold)}%`;
-    bar.item.classList.toggle("is-triggered", isPressed(values, key));
+    bar.item.classList.toggle("is-triggered", tripped);
   });
 
   Object.entries(active).forEach(([side, key]) => {
     const pressed = isPressed(values, key);
     byId(`mouse-btn-${side}`).classList.toggle("is-pressed", pressed);
-    model?.setButton(side, pressed);
+    model?.setButton(side, pressShare(values[key], thresholdOf(key), pressed),
+      pressed);
   });
 
   byId("stage-press").textContent =
     `${values[active.left]} / ${values[active.right]}`;
+}
+
+// Wie weit ist der Druck in seinem Abschnitt fortgeschritten? Unterhalb der
+// Schwelle ist das der Anlauf auf sie zu, oberhalb der Weg von ihr bis zum
+// Anschlag - also bis dorthin, wo auch der Balken endet. Beides ergibt einen
+// Anteil zwischen null und eins; welche Farbe daraus wird, sagt die Treppe,
+// die auch der Deckel benutzt.
+function pressShare(pressure, threshold, tripped) {
+  if (!tripped) return threshold > 0 ? Math.min(pressure / threshold, 1) : 0;
+  const room = PRESS_SCALE - threshold;
+  return room > 0 ? Math.min((pressure - threshold) / room, 1) : 1;
 }
 
 function isPressed(values, key) {
@@ -589,7 +599,7 @@ function isPressed(values, key) {
 }
 
 function percentOfScale(value) {
-  return Math.min(100, (value / pressScale) * 100);
+  return Math.min(100, (value / PRESS_SCALE) * 100);
 }
 
 function showWheel(sample) {
@@ -731,13 +741,10 @@ function resetLiveReadouts() {
   previousAngle = null;
   turnedAngle = 0;
 
-  // Die Skala gehört zur Messreihe und beginnt mit ihr von vorn.
-  pressScale = PRESS_SCALE_MIN;
-
   pressBars.forEach((bar) => {
     bar.value.textContent = "--";
-    bar.scale.textContent = pressScale;
     bar.fill.style.width = "0%";
+    bar.fill.style.removeProperty("--press-tone");
     bar.item.classList.remove("is-triggered");
   });
 

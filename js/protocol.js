@@ -15,6 +15,11 @@ export const SENSOR_KEYS = [
   "rightHall",
 ];
 
+// Druck und Schwelle teilen sich ein Byte mit dem Freigabebit und haben
+// deshalb sieben Bit: mehr als 127 kann weder gemessen noch eingestellt
+// werden. Das ist die Obergrenze der Balken.
+export const PRESS_MAX = 0x7f;
+
 // Die Beschriftung hängt an der Sprache und wird deshalb erfragt, nicht
 // abgelegt: Eine Tabelle müsste beim Umschalten neu gebaut werden.
 export function sensorLabel(key) {

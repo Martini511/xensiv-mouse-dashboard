@@ -112,6 +112,37 @@ const HIDDEN_OPACITY = 1;
 const PRESS_COLOR = 0x12a190;
 const PRESS_GLOW = 0.35;
 
+// Der Weg zur Schwelle und das Ausloesen sind zweierlei, und die Taste sagt
+// beides. Waehrend des Anlaufs traegt sie Blau - je fester gedrueckt wird,
+// desto tiefer. Beim Ueberschreiten springt sie ohne Uebergang auf das Gruen,
+// das in dieser Oberflaeche ueberall "ausgeloest" heisst. So ist der
+// Ausloesepunkt am Farbwechsel abzulesen.
+//
+// Blau und nicht das Orange der Schwellenmarke, aus zwei Gruenden. Aufgehellt
+// bleibt Blau erkennbar Blau, waehrend Orange zu Rosa wird - einer anderen
+// Farbe, nicht derselben in schwach. Und Orange neben Gruen ist genau das
+// Paar, das bei Rot-Gruen-Sehschwaeche zusammenfaellt; Blau neben Gruen bleibt
+// auch dann zu unterscheiden.
+const PRESS_NEAR_COLOR = 0x6bb2ff;
+const PRESS_NEAR_DEEP = 0x0b4fbe;
+const PRESS_TRIP_COLOR = PRESS_COLOR;
+
+// Eine halbe Beimischung auf weissem Gehaeuse ergibt keine halbe Farbe,
+// sondern Pastell. Dagegen hilft zweierlei: Der Ton dunkelt mit dem Druck
+// nach, und die Beimischung waechst anfangs steiler als der Druck. Bei null
+// bleibt sie null, damit eine unberuehrte Taste weiss bleibt.
+const PRESS_NEAR_CURVE = 0.5;
+
+// Oberhalb der Schwelle ist die Beimischung schon voll ausgefahren und kann
+// den weiteren Druck nicht mehr zeigen. Sie durch Leuchten zu steigern hat
+// sich als Irrweg erwiesen: Auf dem hellen Deckel brennt das die Farbe aus,
+// und aus dem kraeftigen Gruen wird ein blasses Mint - je fester gedrueckt,
+// desto weniger Farbe. Auf hellem Grund liest sich "staerker" als satter und
+// tiefer. Der Ton wandert deshalb ins Dunkle; das Leuchten setzt nur eine
+// Kante und bleibt so schwach, dass es nichts ueberstrahlt.
+const PRESS_DEEP_COLOR = 0x02463d;
+const PRESS_TRIP_GLOW = [0.1, 0.45];
+
 // Ein Sensorgehäuse misst drei Millimeter auf einer Platine von hundert. Bei
 // der Leuchtstärke einer Taste wäre es ein Fleck, den man suchen muss – und
 // selbst hell bliebe es klein. Deshalb bekommt es zusätzlich einen Lichthof,
@@ -683,9 +714,14 @@ export class MouseModel {
     geometry.computeBoundingBox();
     const nose = geometry.boundingBox.max.z;
     this.press = {
-      uPressColor: { value: new THREE.Color(PRESS_COLOR) },
-      uPressGlow: { value: PRESS_GLOW },
+      uNearColor: { value: new THREE.Color(PRESS_NEAR_COLOR) },
+      uNearDeep: { value: new THREE.Color(PRESS_NEAR_DEEP) },
+      uTripColor: { value: new THREE.Color(PRESS_TRIP_COLOR) },
+      uDeepColor: { value: new THREE.Color(PRESS_DEEP_COLOR) },
+      uNearCurve: { value: PRESS_NEAR_CURVE },
+      uPressGlow: { value: new THREE.Vector2(...PRESS_TRIP_GLOW) },
       uPressed: { value: new THREE.Vector2(0, 0) },
+      uPressTrip: { value: new THREE.Vector2(0, 0) },
       uPressFade: { value: new THREE.Vector2(end + (nose - end) * PRESS_FADE, end) },
     };
 
@@ -699,20 +735,46 @@ export class MouseModel {
       shader.vertexShader = shader.vertexShader
         .replace("#include <common>", `#include <common>
           uniform vec2 uPressed;
+          uniform vec2 uPressTrip;
           uniform vec2 uPressFade;
-          varying float vPress;`)
+          varying float vShare;
+          varying float vTrip;
+          varying float vFade;`)
         .replace("#include <begin_vertex>", `#include <begin_vertex>
-          vPress = smoothstep(uPressFade.y, uPressFade.x, position.z)
-            * (position.x >= 0.0 ? uPressed.x : uPressed.y);`);
+          float pressSide = position.x >= 0.0 ? 1.0 : 0.0;
+          vShare = mix(uPressed.y, uPressed.x, pressSide);
+          vTrip = mix(uPressTrip.y, uPressTrip.x, pressSide);
+          vFade = smoothstep(uPressFade.y, uPressFade.x, position.z);`);
       shader.fragmentShader = shader.fragmentShader
         .replace("#include <common>", `#include <common>
-          uniform vec3 uPressColor;
-          uniform float uPressGlow;
-          varying float vPress;`)
+          uniform vec3 uNearColor;
+          uniform vec3 uNearDeep;
+          uniform vec3 uTripColor;
+          uniform vec3 uDeepColor;
+          uniform float uNearCurve;
+          uniform vec2 uPressGlow;
+          varying float vShare;
+          varying float vTrip;
+          varying float vFade;
+          // Beide Abschnitte arbeiten gleich: Der Ton dunkelt mit dem Druck
+          // nach. Nur der Anlauf regelt zusaetzlich die Beimischung hoch,
+          // waehrend sie oberhalb der Schwelle voll steht. Der Uebergang
+          // dazwischen ist keiner - step, nicht smoothstep: Der Farbwechsel ist
+          // die Meldung, dass die Schwelle ueberschritten ist, und eine Meldung
+          // gilt oder gilt nicht.
+          float pressTrip() { return step(0.5, vTrip); }
+          vec3 pressTone() {
+            return mix(mix(uNearColor, uNearDeep, vShare),
+              mix(uTripColor, uDeepColor, vShare), pressTrip());
+          }
+          float pressAmount() {
+            return vFade * mix(pow(vShare, uNearCurve), 1.0, pressTrip());
+          }`)
         .replace("#include <color_fragment>", `#include <color_fragment>
-          diffuseColor.rgb = mix(diffuseColor.rgb, uPressColor, vPress);`)
+          diffuseColor.rgb = mix(diffuseColor.rgb, pressTone(), pressAmount());`)
         .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-          totalEmissiveRadiance += uPressColor * (vPress * uPressGlow);`);
+          totalEmissiveRadiance += pressTone() * (pressAmount() * pressTrip()
+            * mix(uPressGlow.x, uPressGlow.y, vShare));`);
     };
     mesh.material = material;
   }
@@ -728,10 +790,17 @@ export class MouseModel {
     this.#invalidate();
   }
 
-  setButton(side, pressed) {
+  // Wie stark sich die Taste faerbt, sagt der Druck; welche Farbe sie traegt,
+  // sagt allein die Schwelle. Der Anteil zaehlt dabei innerhalb des jeweiligen
+  // Abschnitts: unter der Schwelle der Anlauf auf sie zu, darueber das, was
+  // ueber sie hinausgeht.
+  setButton(side, share = 0, tripped = false) {
     if (!this.press) return;
     const positive = (side === "left") === LEFT_IS_POSITIVE_X;
-    this.press.uPressed.value[positive ? "x" : "y"] = pressed ? 1 : 0;
+    const axis = positive ? "x" : "y";
+
+    this.press.uPressed.value[axis] = clamp(share, 0, 1);
+    this.press.uPressTrip.value[axis] = tripped ? 1 : 0;
     this.#invalidate();
   }
 
@@ -790,8 +859,8 @@ export class MouseModel {
   reset() {
     this.setWheelAngle(0);
     this.setWheelPressed(false);
-    this.setButton("left", false);
-    this.setButton("right", false);
+    this.setButton("left", 0, false);
+    this.setButton("right", 0, false);
   }
 
   // ─── Bild ───────────────────────────────────────────
@@ -965,6 +1034,21 @@ export class MouseModel {
 
 function clamp(value, low, high) {
   return Math.min(high, Math.max(low, value));
+}
+
+// Dieselbe Farbtreppe, die der Deckel zeigt - als CSS-Farbe fuer die Balken
+// daneben. Die Skala gehoert an eine Stelle: Zwei Tabellen, die dasselbe
+// bedeuten sollen, laufen frueher oder spaeter auseinander.
+export function pressColor(share, tripped) {
+  const part = clamp(share, 0, 1);
+  const [from, to] = tripped
+    ? [PRESS_TRIP_COLOR, PRESS_DEEP_COLOR]
+    : [PRESS_NEAR_COLOR, PRESS_NEAR_DEEP];
+  const channel = (shift) => {
+    const low = (from >> shift) & 0xff;
+    return Math.round(low + (((to >> shift) & 0xff) - low) * part);
+  };
+  return `rgb(${channel(16)} ${channel(8)} ${channel(0)})`;
 }
 
 // Wo ein Bauteil steckt, sagt seine Geometrie, nicht sein Knoten: Der Export

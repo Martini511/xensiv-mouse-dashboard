@@ -383,7 +383,10 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .press-values b { color: var(--ink); }
 
 .press-track { position: relative; height: 12px; background: #eef1f1; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-.press-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--accent-soft), var(--accent)); transition: width .05s linear; }
+/* Den Ton setzt die Anzeige je Messwert: blau im Anlauf, ab der Schwelle grün,
+   beides mit dem Druck nachdunkelnd – dieselbe Treppe wie am Modell. Der
+   Rückfallwert gilt nur, solange noch nichts gemessen wurde. */
+.press-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--press-tone, var(--accent-soft)); transition: width .05s linear, background-color .05s linear; }
 .press-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--signal); transform: translateX(-50%); }
 .press-scale { display: flex; justify-content: space-between; margin-top: 5px; color: var(--muted); font: 10px "IBM Plex Mono", monospace; }
 
