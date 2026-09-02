@@ -77,6 +77,13 @@ const HULL_DIRECTIONS = 64;
 const RETURN_DELAY = 2200;
 const RETURN_EASE = 0.055;
 
+// Der Wechsel des Reiters ist etwas anderes als die traege Rueckkehr nach
+// dem Loslassen: Er ist gewollt, und die Ansicht darf ihm zuegiger folgen -
+// aber eben folgen und nicht umspringen. Wer den Reiter wechselt, soll
+// sehen, wohin die Ansicht wandert; sonst muss er das Modell jedes Mal neu
+// suchen.
+const VIEW_EASE = 0.09;
+
 // Die Maus zeigt mit der Nase zum Betrachter. Wer sie bedient, sitzt also
 // dahinter – seine linke Taste liegt damit auf der +X-Seite des Modells.
 const LEFT_IS_POSITIVE_X = true;
@@ -223,6 +230,7 @@ export class MouseModel {
     this.chosen = {};
     this.focus = null;
     this.marked = null;
+    this.settling = false;
     this.wheels = [];
     this.wheelMaterials = [];
     this.restWheel = [];
@@ -309,6 +317,8 @@ export class MouseModel {
     this.canvas.addEventListener("pointerdown", (event) => {
       pointers.set(event.pointerId, event);
       last = event;
+      // Wer selbst dreht, hat Vorrang vor einem laufenden Reiterwechsel.
+      this.settling = false;
       this.canvas.setPointerCapture(event.pointerId);
       this.lastInput = Infinity;      // solange gehalten wird, kein Rücklauf
     });
@@ -458,9 +468,10 @@ export class MouseModel {
     this.#showLed();
     this.#showDpi();
 
-    const home = this.view.home;
-    this.azimuth = home.azimuth;
-    this.polar = home.polar;
+    // Nicht die Winkel setzen, sondern den Weg dorthin freigeben: Die
+    // Bildschleife gleitet in die neue Ruhelage. Abstand und Blickpunkt
+    // gleiten ohnehin schon mit - es fehlte allein der Winkel.
+    this.settling = true;
     this.#measure(this.pivot);
     this.#invalidate();
   }
@@ -816,7 +827,9 @@ export class MouseModel {
       const home = this.view.home;
       this.baseDistance = this.#fitDistance(
         home.azimuth, home.polar, horizontal, vertical) * FIT_MARGIN;
-      if (!this.focus) this.distance = this.baseDistance;
+      // Waehrend eines Reiterwechsels nicht zupacken: Der Abstand gleitet
+      // dann mit, statt den weichen Uebergang mit einem Sprung zu zerreissen.
+      if (!this.focus && !this.settling) this.distance = this.baseDistance;
       return;
     }
 
@@ -832,7 +845,7 @@ export class MouseModel {
       }
     }
     this.baseDistance = worst * FIT_MARGIN;
-    if (!this.focus) this.distance = this.baseDistance;
+    if (!this.focus && !this.settling) this.distance = this.baseDistance;
   }
 
   // Wie weit muss die Kamera weg, damit das Modell ins Bild passt? Ein Punkt
@@ -884,16 +897,22 @@ export class MouseModel {
       this.polar += (this.focus.polar - this.polar) * FOCUS_EASE;
       moving = moving || Math.abs(swing) > 1e-3
         || Math.abs(this.focus.polar - this.polar) > 1e-3;
-    } else if (idle > RETURN_DELAY) {
+    } else if (this.settling || idle > RETURN_DELAY) {
       const home = this.view.home;
+      const ease = this.settling ? VIEW_EASE : RETURN_EASE;
       const azimuth = shortestAngle(this.azimuth, home.azimuth);
-      this.azimuth += azimuth * RETURN_EASE;
-      this.polar += (home.polar - this.polar) * RETURN_EASE;
-      moving = moving || Math.abs(azimuth) > 1e-4
-        || Math.abs(home.polar - this.polar) > 1e-4;
-      if (Math.abs(azimuth) <= 1e-4) {
+      const polar = home.polar - this.polar;
+      this.azimuth += azimuth * ease;
+      this.polar += polar * ease;
+      // Angekommen ist die Ansicht erst, wenn beide Winkel stimmen. Wird nur
+      // die Drehung geprüft, endet ein Wechsel zwischen zwei Lagen gleicher
+      // Drehrichtung sofort – und die Neigung springt in einem Schritt.
+      const arrived = Math.abs(azimuth) <= 1e-4 && Math.abs(polar) <= 1e-4;
+      moving = moving || !arrived;
+      if (arrived) {
         this.azimuth = home.azimuth;
         this.polar = home.polar;
+        this.settling = false;
       }
     }
 
