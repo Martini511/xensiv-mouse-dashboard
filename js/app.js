@@ -291,7 +291,10 @@ async function monitorLoop() {
       }
     } catch (error) {
       stopMonitoring();
-      showError(error);
+      // Ist die Verbindung verloren, sagt das der Transport schon selbst
+      // und sucht bereits. Eine zweite, scharfe Meldung daneben stünde nur
+      // im Weg – der Hinweis auf den Ruhezustand steht ja schon da.
+      if (!mouse.reconnecting) showError(error);
       return;
     }
 

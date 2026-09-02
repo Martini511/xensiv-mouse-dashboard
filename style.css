@@ -109,6 +109,22 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
 
 .connection-tools { display: flex; align-items: center; gap: 18px; }
 
+/* Die Fassungsnummer steht in der Ecke und draengt sich nicht auf. Sie ist
+   nicht anzuklicken und nicht auszuwaehlen - gebraucht wird sie nur, wenn
+   jemand nach ihr fragt. */
+.app-version {
+  position: fixed;
+  right: 10px;
+  bottom: 8px;
+  z-index: 3;
+  color: var(--muted);
+  font: 500 10px "IBM Plex Mono", monospace;
+  letter-spacing: .06em;
+  opacity: .55;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* Die Sprachwahl ist ein Werkzeug der Seite, kein Bedienelement der Maus.
    Sie tritt deshalb zurueck: die Schrift der Statusanzeigen, kein Rahmen,
    der um Aufmerksamkeit bittet. */

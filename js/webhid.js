@@ -43,6 +43,13 @@ const STATUS_MESSAGES = [
 
 const RECONNECT_INTERVAL = 2000;
 
+// Legt sich die Maus schlafen, bleibt ihr Geraeteknoten im System oft
+// bestehen: Das disconnect-Ereignis kommt dann nie, und eine Anfrage
+// verhallt einfach. Ohne Zeitlimit wartete die Seite darauf bis in alle
+// Ewigkeit. Der Wert ist grosszuegig gegenueber der Abfragerate von etwa
+// zehn Werten je Sekunde.
+const COMMAND_TIMEOUT = 2500;
+
 export class XensivMouseHid extends EventTarget {
   constructor() {
     super();
@@ -293,10 +300,8 @@ export class XensivMouseHid extends EventTarget {
     request[0] = command;
     request[1] = payload.byteLength;
     request.set(payload, 2);
-    await this.device.sendFeatureReport(FEATURE_REPORT_ID, request);
 
-    const response = normalizeReport(
-      await this.device.receiveFeatureReport(FEATURE_REPORT_ID));
+    const response = await this.transfer(request);
 
     if (response.byteLength !== REPORT_SIZE) {
       throw new Error(t("error.wrongLength",
@@ -322,6 +327,33 @@ export class XensivMouseHid extends EventTarget {
     const data = response.slice(3, 3 + responseLength);
     return new DataView(data.buffer, data.byteOffset, data.byteLength);
   }
+
+  // Ein Fehlschlag auf der Funkstrecke ist etwas anderes als eine Antwort,
+  // die nicht passt. Das erste heisst: die Verbindung ist weg - und dann
+  // muss die Suche anlaufen, sonst wartet die Seite auf ein Geraet, das
+  // sich schlafen gelegt hat und sich nie wieder von selbst meldet. Das
+  // zweite ist ein Protokollfehler und laesst die Verbindung unberuehrt.
+  async transfer(request) {
+    try {
+      await withTimeout(
+        this.device.sendFeatureReport(FEATURE_REPORT_ID, request));
+      return normalizeReport(await withTimeout(
+        this.device.receiveFeatureReport(FEATURE_REPORT_ID)));
+    } catch (error) {
+      this.handleDisconnect();
+      throw error;
+    }
+  }
+}
+
+// Abbrechen laesst sich eine laufende Anfrage nicht - aber aufhoeren, auf
+// sie zu warten. Was danach noch eintrifft, verfaellt: Nach dem Zeitablauf
+// gilt die Verbindung als verloren, und bis zum Neuaufbau nimmt niemand
+// mehr etwas entgegen.
+function withTimeout(promise, milliseconds = COMMAND_TIMEOUT) {
+  return Promise.race([promise, new Promise((resolve, reject) => {
+    window.setTimeout(() => reject(new Error(t("error.timeout"))), milliseconds);
+  })]);
 }
 
 function isXensiv(device) {
