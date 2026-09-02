@@ -131,13 +131,25 @@ export class XensivMouseHid extends EventTarget {
     const devices = await this.knownDevices();
     if (devices.length === 0) return null;
 
-    await this.attach(devices[0]);
-    return devices[0];
+    // Nach einem Verbindungsverlust kann dasselbe Geraet zweimal in der
+    // Liste stehen: der alte Eintrag, den wir noch offen halten, und der
+    // frische. Brauchbar ist der frische - erkennbar daran, dass ihn
+    // niemand geoeffnet hat.
+    const device = devices.find((entry) => !entry.opened) || devices[0];
+    await this.attach(device);
+    return device;
   }
 
   async attach(device) {
+    // Ein Griff, der vom vorigen Mal offen geblieben ist, taugt nach einem
+    // Verbindungsverlust nichts mehr. Das System hat das Geraet inzwischen
+    // neu angemeldet, der alte Griff zeigt ins Leere - `opened` sagt
+    // trotzdem ja. Wer sich darauf verlaesst, oeffnet nie wieder und fragt
+    // von da an ins Leere: Genau daran scheiterte das Wiederverbinden nach
+    // dem Ruhezustand. Deshalb zuerst schliessen, dann frisch oeffnen.
+    await closeQuietly(device);
+    await device.open();
     this.device = device;
-    if (!device.opened) await device.open();
 
     // Ein geoeffneter Kanal ist noch keine Verbindung. Bei einer
     // schlafenden Funkmaus laesst sich der Geraeteknoten oeffnen, waehrend
@@ -213,9 +225,15 @@ export class XensivMouseHid extends EventTarget {
   // `expected` sagt, ob das Abmelden von hier ausging. Nur ein
   // unerwartetes loest die Suche aus.
   handleDisconnect(expected = this.parked) {
-    const wasConnected = Boolean(this.device);
+    const device = this.device;
+    const wasConnected = Boolean(device);
     this.device = null;
     this.transactionQueue = Promise.resolve();
+
+    // Den Griff nicht weiter offen halten. Er zeigt nach dem Verlust ohnehin
+    // ins Leere, und solange er besteht, gibt das System das Geraet nicht
+    // sauber wieder her.
+    closeQuietly(device);
 
     if (wasConnected) this.dispatchEvent(new Event("disconnected"));
     if (!expected) this.startReconnect();
@@ -252,8 +270,11 @@ export class XensivMouseHid extends EventTarget {
 
       try {
         await this.connectKnown();
-      } catch {
-        // Die Maus schläft noch – der nächste Anlauf folgt
+      } catch (error) {
+        // Die Maus schläft noch – der nächste Anlauf folgt. Die Spur bleibt
+        // in der Konsole: Wenn das Wiederfinden doch einmal haengt, steht
+        // dort, woran es lag, statt dass man wieder raten muss.
+        console.debug("[XENSIV] Anlauf gescheitert:", error?.message || error);
       }
 
       if (this.reconnecting) this.scheduleReconnect();
@@ -434,9 +455,9 @@ function toUint8Array(value) {
   return new Uint8Array(value);
 }
 
-function closeQuietly(device) {
+async function closeQuietly(device) {
   try {
-    if (device?.opened) device.close();
+    if (device?.opened) await device.close();
   } catch {
     // Kanal war ohnehin geschlossen
   }
