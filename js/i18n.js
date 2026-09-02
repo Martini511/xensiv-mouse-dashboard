@@ -125,8 +125,9 @@ const TEXTS = {
     "cal.start": "Start 360\u00b0 calibration",
     "cal.hint": "The calibration run expects one full revolution of the wheel. "
       + "The pressure threshold is shown a thousand times larger than the "
-      + "firmware keeps it \u2013 exactly as in the desktop tool. In this form it "
-      + "compares directly with the radius from the live view.",
+      + "firmware keeps it \u2013 exactly as in the desktop tool. The live view "
+      + "shows the mark a hundred units lower: the mouse clicks that much "
+      + "earlier than the stored value suggests.",
 
     "sensor.leftForce": "Left Force",
     "sensor.leftTmr2d": "Left 2D TMR",
@@ -311,9 +312,9 @@ const TEXTS = {
     "cal.start": "360\u00b0-Kalibrierung starten",
     "cal.hint": "Der Kalibrierlauf erwartet eine vollst\u00e4ndige Umdrehung des "
       + "Rads. Die Druckschwelle wird tausendfach gr\u00f6\u00dfer angezeigt, als die "
-      + "Firmware sie f\u00fchrt \u2013 genau wie im Desktop-Werkzeug. In dieser "
-      + "Darstellung ist sie unmittelbar mit dem Radius aus der Live-Ansicht "
-      + "vergleichbar.",
+      + "Firmware sie f\u00fchrt \u2013 genau wie im Desktop-Werkzeug. Die Live-Ansicht "
+      + "zeigt die Marke hundert Einheiten tiefer: So viel fr\u00fcher klickt die "
+      + "Maus, als der gespeicherte Wert vermuten l\u00e4sst.",
 
     "sensor.leftForce": "Links Force",
     "sensor.leftTmr2d": "Links 2D TMR",

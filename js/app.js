@@ -618,20 +618,41 @@ function showWheel(sample) {
 // die Leitung – daher der zusätzliche Faktor auf dem Radius.
 const WHEEL_RADIUS_SCALE = 10;
 
+// Gemessen, nicht hergeleitet: Die Maus loest den Klick aus, wenn der
+// Radius die Marke um hundert Einheiten dieser Anzeige unterschreitet - das
+// Geraet klickt also frueher, als die Rechnung oben erwarten liesse.
+//
+// Woher der Abstand kommt, sagt kein Feld des Protokolls. Denkbar ist eine
+// Sicherheitsspanne in der Firmware, damit ein Klick nicht erst am
+// aeussersten Rand des Kalibrierbereichs anspricht. Sollte sich zeigen,
+// dass der Abstand mit der Marke waechst statt fest zu bleiben, ist er in
+// Wahrheit ein Faktor - zu aendern waere dann diese eine Zeile.
+const WHEEL_PRESS_MARGIN = 100;
+
 let wheelPressTrigger = 0;
 let wheelRadiusMin = Infinity;
 let wheelSamples = 0;
 let wheelHintShown = false;
 
+// Die Marke, an der die Anzeige den Klick meldet. Sie steht auch in der
+// Ablesung: Zwei Zahlen nebeneinander taugen nur, wenn die zweite die ist,
+// an der die erste anschlaegt.
+function wheelPressAt() {
+  return wheelPressTrigger > 0
+    ? wheelPressTrigger - WHEEL_PRESS_MARGIN
+    : 0;
+}
+
 function showWheelPress(sample) {
   const radius =
     Math.hypot(sample.calibratedX, sample.calibratedZ) * WHEEL_RADIUS_SCALE;
+  const trigger = wheelPressAt();
 
-  byId("wheel-press").textContent = wheelPressTrigger > 0
-    ? `${Math.round(radius)} / ${Math.round(wheelPressTrigger)}`
+  byId("wheel-press").textContent = trigger > 0
+    ? `${Math.round(radius)} / ${Math.round(trigger)}`
     : `${Math.round(radius)} / --`;
 
-  const pressed = wheelPressTrigger > 0 && radius > wheelPressTrigger;
+  const pressed = trigger > 0 && radius > trigger;
   byId("mouse-wheel").classList.toggle("is-pressed", pressed);
   model?.setWheelPressed(pressed);
 
@@ -646,12 +667,13 @@ function checkWheelTrigger(radius) {
   wheelSamples += 1;
   wheelRadiusMin = Math.min(wheelRadiusMin, radius);
 
+  const trigger = wheelPressAt();
   if (wheelHintShown || wheelSamples < 60) return;
-  if (wheelPressTrigger <= 0 || wheelRadiusMin <= wheelPressTrigger) return;
+  if (trigger <= 0 || wheelRadiusMin <= trigger) return;
 
   wheelHintShown = true;
   notify(t("msg.pressWarning", {
-    trigger: Math.round(wheelPressTrigger),
+    trigger: Math.round(trigger),
     radius: Math.round(wheelRadiusMin),
   }), true);
 }
