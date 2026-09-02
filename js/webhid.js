@@ -105,6 +105,13 @@ export class XensivMouseHid extends EventTarget {
       this.attach(device).catch(
         (error) => trace("  \u2192 gescheitert:", error?.message || error));
     });
+
+    // Das An- und Abmelden meldet das System, nicht die Seite. Beim Laden
+    // ist die Maus in aller Regel laengst da - dann kommt keine Anmeldung,
+    // und das ist richtig so. Diese Zeile sagt trotzdem, dass gehorcht wird.
+    trace(navigator.hid
+      ? "WebHID bereit - horcht auf An- und Abmeldungen des Systems"
+      : "WebHID steht nicht zur Verfuegung");
   }
 
   get connected() {
@@ -201,6 +208,7 @@ export class XensivMouseHid extends EventTarget {
     }
 
     this.stopReconnect("verbunden");
+    trace("Verbunden:", describe(device));
 
     this.dispatchEvent(new CustomEvent("connected", {
       detail: { name: device.productName || "XENSIV Maus" },
