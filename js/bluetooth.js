@@ -191,7 +191,11 @@ export class XensivMouseBluetooth extends EventTarget {
   // Erzwungener Neuaufbau – die Alternative zum Neustart der Maus.
   async reset() {
     const device = this.device || (await this.knownDevices())[0];
-    if (!device) throw new Error(t("error.noneReleased"));
+
+    // Ohne bekanntes Geraet gibt es nichts neu aufzubauen. Der Druck auf
+    // die Schaltflaeche ist die Geste, die der Auswahldialog verlangt -
+    // also fragen wir nach, statt in einer Sackgasse zu enden.
+    if (!device) return this.connect();
 
     this.parked = false;
     this.stopReconnect();

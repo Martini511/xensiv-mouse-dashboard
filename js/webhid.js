@@ -76,8 +76,7 @@ export class XensivMouseHid extends EventTarget {
     // erwartet, dass sie sich meldet - auch wenn beim Laden noch kein
     // Geraet freigegeben war und deshalb nie jemand gesucht hat.
     navigator.hid?.addEventListener("connect", ({ device }) => {
-      if (this.connected || this.parked) return;
-      if (!isXensiv(device) || !hasConfigurationReport(device)) return;
+      if (this.connected || this.parked || !isOurs(device)) return;
       this.attach(device).catch(() => {});
     });
   }
@@ -106,7 +105,7 @@ export class XensivMouseHid extends EventTarget {
 
     if (devices.length === 0) throw new Error(t("error.noneChosen"));
 
-    const device = devices.find(hasConfigurationReport);
+    const device = devices.find(isOurs);
     if (!device) {
       throw new Error(t("error.noReport"));
     }
@@ -122,8 +121,7 @@ export class XensivMouseHid extends EventTarget {
 
     try {
       const devices = await navigator.hid.getDevices();
-      return devices.filter((device) =>
-        isXensiv(device) && hasConfigurationReport(device));
+      return devices.filter(isOurs);
     } catch {
       return [];
     }
@@ -140,6 +138,24 @@ export class XensivMouseHid extends EventTarget {
   async attach(device) {
     this.device = device;
     if (!device.opened) await device.open();
+
+    // Ein geoeffneter Kanal ist noch keine Verbindung. Bei einer
+    // schlafenden Funkmaus laesst sich der Geraeteknoten oeffnen, waehrend
+    // die Funkstrecke aus ist - die Seite meldete dann "verbunden" und
+    // faende sich beim ersten Befehl wieder auf der Suche. Zwischen beidem
+    // im Sekundentakt hin und her zu springen waere schlimmer als gar
+    // nicht zu verbinden. Erst eine beantwortete Frage macht aus dem Kanal
+    // eine Verbindung.
+    try {
+      await this.command(COMMAND.getButtonConfig);
+    } catch (error) {
+      // Kam die Antwort gar nicht, hat `transfer` schon aufgeraeumt und
+      // das Geraet abgeraeumt - dann ist der Versuch gescheitert. Ein
+      // Protokollfehler dagegen *ist* eine Antwort: Die Maus ist da, nur
+      // ihre Firmware ist anderer Meinung. Das steht der Verbindung nicht
+      // im Weg.
+      if (!this.device) throw error;
+    }
 
     this.stopReconnect();
 
@@ -169,7 +185,13 @@ export class XensivMouseHid extends EventTarget {
   // Erzwungener Neuaufbau – die Alternative zum Neustart der Maus.
   async reset() {
     const device = this.device || (await this.knownDevices())[0];
-    if (!device) throw new Error(t("error.noneReleased"));
+
+    // Kennt der Browser gar kein Geraet mehr - weil die Freigabe
+    // zurueckgenommen wurde oder die Maus dem System abhanden gekommen ist
+    // -, laesst sich nichts neu aufbauen. Statt in einer Sackgasse zu enden
+    // fragt die Seite dann nach: Der Druck auf die Schaltflaeche ist genau
+    // die Geste, die der Browser fuer den Auswahldialog verlangt.
+    if (!device) return this.connect();
 
     this.parked = false;
     this.stopReconnect();
@@ -212,30 +234,42 @@ export class XensivMouseHid extends EventTarget {
 
     this.reconnecting = true;
     this.dispatchEvent(new Event("reconnecting"));
+    this.scheduleReconnect();
+  }
 
-    this.reconnectTimer = window.setInterval(
-      () => this.attemptReconnect(), RECONNECT_INTERVAL);
+  // Ein fester Takt taugt hier nicht. Ein Versuch dauert laenger als er,
+  // sobald er in das Zeitlimit laeuft - dann ueberholen sich die Versuche
+  // gegenseitig. Und weil jeder von ihnen das Geraet oeffnet, sieht der
+  // naechste eine offene Verbindung, haelt sie fuer bestehend und laesst es
+  // bleiben: Die Suche stand still, obwohl der Wecker lief. Der naechste
+  // Anlauf wird deshalb erst gestellt, wenn der vorige vorbei ist.
+  scheduleReconnect(pause = RECONNECT_INTERVAL) {
+    window.clearTimeout(this.reconnectTimer);
+
+    this.reconnectTimer = window.setTimeout(async () => {
+      this.reconnectTimer = null;
+      if (!this.reconnecting) return;
+
+      try {
+        await this.connectKnown();
+      } catch {
+        // Die Maus schläft noch – der nächste Anlauf folgt
+      }
+
+      if (this.reconnecting) this.scheduleReconnect();
+    }, pause);
   }
 
   stopReconnect() {
-    window.clearInterval(this.reconnectTimer);
+    window.clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.reconnecting = false;
   }
 
-  async attemptReconnect() {
-    if (!this.reconnecting || this.connected) return;
-
-    try {
-      await this.connectKnown();
-    } catch {
-      // Die Maus schläft noch – der nächste Anlauf folgt
-    }
-  }
-
   resume() {
     this.checkLink();
-    if (this.reconnecting) this.attemptReconnect();
+    // Aus dem Hintergrund zurueck: nicht erst den Takt abwarten.
+    if (this.reconnecting) this.scheduleReconnect(0);
   }
 
   // ─── Gerätefunktionen ───────────────────────────────
@@ -364,6 +398,22 @@ function isXensiv(device) {
 function hasConfigurationReport(device) {
   return device.collections.some((collection) =>
     collection.featureReports.some((report) => report.reportId === FEATURE_REPORT_ID));
+}
+
+// Ob ein Geraet unsere Maus ist, sagen Hersteller- und Produktnummer. Der
+// Feature-Report ist die zweite Probe - aber nur, wenn das System ihn
+// ueberhaupt nennt.
+//
+// Eine leere Beschreibungsliste ist kein Nein. Sie heisst, dass die
+// Beschreibung gerade nicht abrufbar ist, und genau das ist bei einer
+// schlafenden Funkmaus der Normalfall: Der Geraeteknoten steht noch, die
+// Berichte dazu bekommt das System aber erst wieder, wenn die Maus
+// antwortet. Wer hier streng filtert, wirft genau das Geraet weg, das er
+// sucht - und wundert sich, dass nie etwas zurueckkommt. Ob der Report
+// wirklich da ist, zeigt spaetestens der erste Befehl.
+function isOurs(device) {
+  return isXensiv(device)
+    && (device.collections.length === 0 || hasConfigurationReport(device));
 }
 
 // Manche Plattformen liefern die Report-Kennung als erstes Byte mit.
