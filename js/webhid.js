@@ -200,7 +200,7 @@ export class XensivMouseHid extends EventTarget {
       this.attaching = false;
     }
 
-    this.stopReconnect();
+    this.stopReconnect("verbunden");
 
     this.dispatchEvent(new CustomEvent("connected", {
       detail: { name: device.productName || "XENSIV Maus" },
@@ -212,16 +212,21 @@ export class XensivMouseHid extends EventTarget {
 
   disconnect() {
     this.parked = true;
-    this.stopReconnect();
+    this.stopReconnect("vom Nutzer getrennt");
     closeQuietly(this.device);
     this.handleDisconnect();
   }
 
   // Beim Verlassen der Seite: Ein offener Report-Kanal blockiert den
   // nächsten Seitenaufruf, deshalb wird er ausdrücklich geschlossen.
+  //
+  // Was hier NICHT geschieht: parken. Das Ereignis kommt nicht nur beim
+  // wirklichen Verlassen - der Browser schickt es auch, wenn er die Seite
+  // nur beiseitelegt und spaeter wieder hervorholt. Wer hier parkt, ist
+  // danach dauerhaft taub: Die Suche steht, und selbst das Ereignis vom
+  // Aufwachen wird als "selbst getrennt" verworfen.
   release() {
-    this.parked = true;
-    this.stopReconnect();
+    this.stopReconnect("Seite beiseitegelegt");
     closeQuietly(this.device);
   }
 
@@ -237,7 +242,7 @@ export class XensivMouseHid extends EventTarget {
     if (!device) return this.connect();
 
     this.parked = false;
-    this.stopReconnect();
+    this.stopReconnect("Neuaufbau");
 
     try {
       if (device.opened) await device.close();
@@ -335,8 +340,8 @@ export class XensivMouseHid extends EventTarget {
     }, pause);
   }
 
-  stopReconnect() {
-    if (this.reconnecting) trace("Suche endet");
+  stopReconnect(reason = "ohne Angabe") {
+    if (this.reconnecting) trace("Suche endet:", reason);
     window.clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.reconnecting = false;
@@ -344,8 +349,14 @@ export class XensivMouseHid extends EventTarget {
 
   resume() {
     this.checkLink();
+
     // Aus dem Hintergrund zurueck: nicht erst den Takt abwarten.
-    if (this.reconnecting) this.scheduleReconnect(0);
+    if (this.reconnecting) return this.scheduleReconnect(0);
+
+    // Wurde der Kanal beim Beiseitelegen freigegeben, steht die Seite jetzt
+    // ohne Verbindung und ohne Suche da. Wer nicht selbst getrennt hat,
+    // erwartet, dass sie sich wieder meldet.
+    if (!this.connected && !this.parked) this.startReconnect();
   }
 
   // ─── Gerätefunktionen ───────────────────────────────

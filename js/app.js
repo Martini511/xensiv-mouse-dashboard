@@ -244,6 +244,13 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => mouse.release());
 window.addEventListener("beforeunload", () => mouse.release());
 
+// Der Browser legt Seiten beiseite und holt sie wieder hervor, ohne sie neu
+// zu laden. Dann ist der Kanal freigegeben, aber niemand hat ihn wieder
+// aufgenommen - ohne diesen Weckruf bliebe die Seite stumm sitzen.
+window.addEventListener("pageshow", ({ persisted }) => {
+  if (persisted) mouse.resume();
+});
+
 // ─── Live-Überwachung ─────────────────────────────────
 // Läuft, solange der Reiter offen und die Maus verbunden ist.
 
