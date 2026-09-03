@@ -173,7 +173,7 @@ export class XensivMouseHid extends EventTarget {
     trace("Verbunden:", describe(device));
 
     this.dispatchEvent(new CustomEvent("connected", {
-      detail: { name: device.productName || "XENSIV Maus" },
+      detail: { name: device.productName },
     }));
     return true;
   }

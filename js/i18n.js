@@ -145,6 +145,7 @@ const TEXTS = {
     "view.wheel": "Housing hidden \u00b7 wheel",
 
     "state.offline": "Not connected",
+    "state.unnamed": "XENSIV\u2122 Mouse",
     "state.selecting": "Select mouse",
     "state.resetting": "Resetting",
     "state.running": "Live monitoring running",
@@ -331,6 +332,7 @@ const TEXTS = {
     "view.wheel": "Geh\u00e4use ausgeblendet \u00b7 Rad",
 
     "state.offline": "Nicht verbunden",
+    "state.unnamed": "XENSIV\u2122 Maus",
     "state.selecting": "Maus ausw\u00e4hlen",
     "state.resetting": "Wird zur\u00fcckgesetzt",
     "state.running": "Live-\u00dcberwachung l\u00e4uft",

@@ -155,9 +155,14 @@ resetButton.addEventListener("click", async () => {
 
 mouse.addEventListener("connected", async ({ detail: device }) => {
   setDeviceControls(true);
-  // Der Name kommt vom Gerät und bleibt, wie er ist - er ist das einzige
-  // Stück dieser Anzeige, das keiner Übersetzung bedarf.
-  setConnectionState("online", null, device.name || "XENSIV Maus");
+  // Der Name kommt vom Geraet und bleibt, wie er ist - er ist das einzige
+  // Stueck dieser Anzeige, das keiner Uebersetzung bedarf. Nennt das Geraet
+  // keinen, tritt ein eigener Ersatzname ein, und der gehoert uebersetzt wie
+  // jeder andere Text hier. Deshalb wird in diesem Fall der Schluessel
+  // uebergeben statt fertiger Text: So wechselt der Ersatzname beim
+  // Sprachwechsel mit, statt in der Sprache stehen zu bleiben, in der gerade
+  // verbunden wurde.
+  setConnectionState("online", "state.unnamed", device.name || null);
   setConnectButton("header.disconnect");
   resetButton.hidden = false;
 
