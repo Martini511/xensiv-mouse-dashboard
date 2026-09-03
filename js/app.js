@@ -37,12 +37,12 @@ const MIN_IDLE = 5;
 let monitoring = false;
 let batteryTimer = null;
 
-// Die Balken reichen bis zum groessten Wert, den ein Sensor ueberhaupt melden
-// kann. Frueher wuchs die Skala mit dem bisher gesehenen Hoechstwert mit,
-// damit die kleinen Ausschlaege sichtbar wurden - dafuer bedeutete dieselbe
-// Balkenlaenge zu zwei Zeitpunkten zwei verschiedene Kraefte, und ein einziger
-// harter Druck stauchte alles Folgende. Eine feste Skala bleibt vergleichbar.
-const PRESS_SCALE = PRESS_MAX;
+// Die Balken beginnen bei dem Wert, den ein Sensor der Erwartung nach
+// hoechstens melden kann. Belegt ist diese Grenze nicht - deshalb ist sie kein
+// Deckel: Trifft ein groesserer Wert ein, waechst die Skala mit, statt ihn
+// abzuschneiden. So bleibt die Anzeige auch dann richtig, wenn die Annahme
+// falsch war, und der zu grosse Wert ist am ungewohnten Skalenende abzulesen.
+let pressScale = PRESS_MAX;
 
 // Höchster je Sensor beobachteter Druck. Dient als Plausibilitätsprobe
 // vor dem Schreiben: Eine Schwelle oberhalb davon macht die Taste
@@ -435,7 +435,7 @@ function buildPressBars() {
         <div class="press-fill" data-role="fill"></div>
         <div class="press-marker" data-role="marker"></div>
       </div>
-      <div class="press-scale"><span>0</span><span>${PRESS_SCALE}</span></div>`;
+      <div class="press-scale"><span>0</span><span data-role="scale">${PRESS_MAX}</span></div>`;
 
     list.appendChild(item);
     pressBars.set(key, {
@@ -444,6 +444,7 @@ function buildPressBars() {
       threshold: item.querySelector('[data-role="threshold"]'),
       fill: item.querySelector('[data-role="fill"]'),
       marker: item.querySelector('[data-role="marker"]'),
+      scale: item.querySelector('[data-role="scale"]'),
     });
   });
 }
@@ -550,6 +551,10 @@ function keepSingleSensor(key) {
 }
 
 function showPressure(values) {
+  // Die Skala zuerst nachziehen, sonst bezoegen sich die Balken eines
+  // Durchlaufs auf zwei verschiedene Bezugsgroessen.
+  pressScale = Math.max(pressScale, ...SHOWN_SENSORS.map((key) => values[key]));
+
   const active = {
     left: activeSensor("left"),
     right: activeSensor("right"),
@@ -565,6 +570,7 @@ function showPressure(values) {
 
     bar.value.textContent = pressure;
     bar.threshold.textContent = threshold;
+    bar.scale.textContent = pressScale;
     bar.fill.style.width = `${percentOfScale(pressure)}%`;
     bar.fill.style.setProperty("--press-tone",
       pressColor(pressShare(pressure, threshold, tripped), tripped));
@@ -590,7 +596,7 @@ function showPressure(values) {
 // die auch der Deckel benutzt.
 function pressShare(pressure, threshold, tripped) {
   if (!tripped) return threshold > 0 ? Math.min(pressure / threshold, 1) : 0;
-  const room = PRESS_SCALE - threshold;
+  const room = pressScale - threshold;
   return room > 0 ? Math.min((pressure - threshold) / room, 1) : 1;
 }
 
@@ -599,7 +605,7 @@ function isPressed(values, key) {
 }
 
 function percentOfScale(value) {
-  return Math.min(100, (value / PRESS_SCALE) * 100);
+  return Math.min(100, (value / pressScale) * 100);
 }
 
 function showWheel(sample) {
@@ -741,8 +747,12 @@ function resetLiveReadouts() {
   previousAngle = null;
   turnedAngle = 0;
 
+  // Eine gewachsene Skala gehoert zur Messreihe und beginnt mit ihr von vorn.
+  pressScale = PRESS_MAX;
+
   pressBars.forEach((bar) => {
     bar.value.textContent = "--";
+    bar.scale.textContent = pressScale;
     bar.fill.style.width = "0%";
     bar.fill.style.removeProperty("--press-tone");
     bar.item.classList.remove("is-triggered");

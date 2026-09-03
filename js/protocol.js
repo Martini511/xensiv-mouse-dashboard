@@ -15,9 +15,11 @@ export const SENSOR_KEYS = [
   "rightHall",
 ];
 
-// Druck und Schwelle teilen sich ein Byte mit dem Freigabebit und haben
-// deshalb sieben Bit: mehr als 127 kann weder gemessen noch eingestellt
-// werden. Das ist die Obergrenze der Balken.
+// Die Schwelle teilt sich ein Byte mit dem Freigabebit und hat deshalb
+// nachweislich sieben Bit. Fuer den Druck gilt dasselbe nur der Erwartung
+// nach - verglichen wird er mit einer 7-Bit-Schwelle, also duerfte er kaum
+// weiter reichen. Belegt ist das nirgends, deshalb ist 127 hier der
+// Erwartungswert und keine Zusage: die Skala, mit der die Balken beginnen.
 export const PRESS_MAX = 0x7f;
 
 // Die Beschriftung hängt an der Sprache und wird deshalb erfragt, nicht
@@ -49,11 +51,18 @@ export function decodeButtonConfig(value) {
   }]));
 }
 
+// Das ganze Byte, nicht die unteren sieben Bit. Hier stand einmal dieselbe
+// Maske wie in der Konfiguration - uebernommen von dort, wo das oberste Bit
+// tatsaechlich das Freigabebit ist. Beim Druckwert traegt es nichts
+// Bekanntes, und die Maske machte aus 130 eine 2: Die Anzeige haette bei
+// festem Zudruecken auf null zurueckgesetzt und die Taste als losgelassen
+// gemeldet, waehrend die Maus klickt. Ein zu grosser Wert faellt jetzt auf,
+// statt lautlos zu verschwinden - die Skala waechst dann mit.
 export function decodeButtonPressure(value) {
   requireLength(value, 5, t("live.press"));
   return Object.fromEntries(SENSOR_KEYS.map((key, index) => [
     key,
-    value.getUint8(index) & 0x7f,
+    value.getUint8(index),
   ]));
 }
 
