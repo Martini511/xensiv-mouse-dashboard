@@ -12,6 +12,14 @@ const COLORS = {
 // 400 Messpunkte sind bei 30 Hz gut dreizehn Sekunden.
 const MAX_SAMPLES = 400;
 
+// Die Magnetbahn ist eine Punktwolke, kein Linienzug. Eine Linie behauptet
+// einen Weg zwischen zwei Messungen, den niemand gemessen hat - bei einem
+// Ausreisser zieht sie quer durchs Bild und laesst ihn wie eine Bewegung
+// aussehen. Punkte zeigen nur, was da war. Leicht durchscheinend, damit sich
+// beide Reihen nicht gegenseitig verdecken und dichte Stellen dunkler wirken.
+const DOT_RADIUS = 1.8;
+const DOT_ALPHA = 0.75;
+
 export class WheelCharts {
   constructor(angleCanvas, fieldCanvas) {
     this.angleCanvas = angleCanvas;
@@ -52,7 +60,9 @@ export class WheelCharts {
   drawFieldChart() {
     const { context, width, height } = prepare(this.fieldCanvas);
     drawFrame(context, width, height, "X / Z FELD", "Magnetbahn");
-    if (this.samples.length < 2) return;
+    // Ein einzelner Punkt ist hier bereits eine Aussage - anders als bei der
+    // Linie, die zwei Werte braucht, um ueberhaupt zu entstehen.
+    if (!this.samples.length) return;
 
     const points = this.samples.flatMap((sample) => [
       sample.rawX,
@@ -124,18 +134,24 @@ function drawXY(context, width, height, samples, extent, calibrated, color) {
   const centerY = (height + 20) / 2;
   const scale = Math.min(width - 60, height - 48) / (2 * extent);
 
-  context.strokeStyle = color;
-  context.lineWidth = 2;
-  context.beginPath();
+  context.save();
+  context.globalAlpha = DOT_ALPHA;
+  context.fillStyle = color;
 
-  samples.forEach((sample, index) => {
+  // Alle Punkte in einem einzigen Pfad: Vierhundert einzelne Fuellvorgaenge je
+  // Bild waeren bei dreissig Bildern in der Sekunde spuerbar. Das moveTo vor
+  // jedem Kreis trennt die Teilpfade - ohne es zoege der Bogen eine Linie vom
+  // vorigen Punkt heran, und aus der Punktwolke wuerde wieder ein Linienzug.
+  context.beginPath();
+  samples.forEach((sample) => {
     const x = calibrated ? sample.calibratedX : sample.rawX;
     const z = calibrated ? sample.calibratedZ : sample.rawZ;
     const canvasX = centerX + x * scale;
     const canvasY = centerY - z * scale;
-    if (index === 0) context.moveTo(canvasX, canvasY);
-    else context.lineTo(canvasX, canvasY);
+    context.moveTo(canvasX + DOT_RADIUS, canvasY);
+    context.arc(canvasX, canvasY, DOT_RADIUS, 0, Math.PI * 2);
   });
+  context.fill();
 
-  context.stroke();
+  context.restore();
 }
