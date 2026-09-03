@@ -42,7 +42,17 @@ const WHEEL_HOME = { azimuth: 3.53, polar: 1.08 };
 
 // Nur diesen einen Sensor gibt es, und die Kalibrierung dreht sich um ihn.
 const WHEEL_SENSOR = "wheel.centre";
-const WHEEL_SENSOR_NAME = "TLI493D-M4D7";
+
+// Die Typenbezeichnungen der verbauten Sensoren, je Familie. Sie stehen hier
+// bei den Namensschildern, die sie zeigen - und nur hier. Der Radsensor war
+// im Modell benannt, Force und Hall in der Bedienlogik; wer eine Bezeichnung
+// aenderte, musste an den anderen Ort denken. Beim Hall-Sensor sind es zwei
+// Typen, weil dort zwei verbaut sein koennen.
+const SENSOR_NAMES = {
+  wheel: "TLI493D-x4D7",
+  force: "TLx49012",
+  hall: "TLx49901 / TLV55910",
+};
 
 // Von wo aus der Prüfstrahl auf den Sensor zuläuft, und wie viel Luft er dem
 // Bauteil selbst lässt - sonst meldete dessen eigene Oberfläche einen Treffer.
@@ -229,7 +239,7 @@ const VIEWS = {
   sensors: { shell: false, spin: false, turn: POLAR_FREE, home: BOARD_HOME },
   wheel: {
     shell: false, spin: true, turn: POLAR_FREE, home: WHEEL_HOME,
-    tag: { key: WHEEL_SENSOR, name: WHEEL_SENSOR_NAME },
+    tag: { key: WHEEL_SENSOR, name: SENSOR_NAMES.wheel },
   },
 };
 
@@ -518,8 +528,10 @@ export class MouseModel {
 
   // Zeigt der Betrachter auf eine Sensorzeile, holt das Modell diesen einen
   // Sensor heran und nennt seinen Namen – auch einen abgeschalteten, denn
-  // gerade beim Umstellen will man sehen, worum es geht.
-  focusSensor(family, side, name) {
+  // gerade beim Umstellen will man sehen, worum es geht. Welcher Name das ist,
+  // schlaegt das Modell selbst nach: Es zeigt das Schild, also kennt es auch
+  // die Aufschrift.
+  focusSensor(family, side) {
     const sensor = this.sensors[`${family}.${side}`];
     if (!sensor || this.view !== VIEWS.sensors) return;
 
@@ -531,7 +543,7 @@ export class MouseModel {
       polar: family === "hall" ? FOCUS_TILT : Math.PI - FOCUS_TILT,
       azimuth: Math.sign(sensor.position.x) * FOCUS_SWING,
     };
-    this.label.textContent = name;
+    this.label.textContent = SENSOR_NAMES[family] ?? "";
     this.#showSensors();
   }
 

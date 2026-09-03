@@ -507,18 +507,14 @@ function sideOf(key) {
 }
 
 // Zeigt der Betrachter auf eine Sensorzeile, holt das Modell diesen Sensor
-// heran und nennt seine Typenbezeichnung.
-const SENSOR_NAMES = {
-  hall: "TLI49901 / TLI55910",
-  force: "TLI49012",
-};
-
+// heran und nennt seine Typenbezeichnung. Welche das ist, weiss das Modell
+// selbst - hier steht nur, um welchen Sensor es geht.
 SHOWN_SENSORS.forEach((key) => {
   const row = byId(`${key}-enabled`).closest(".sensor-row");
   if (!row) return;
 
   row.addEventListener("pointerenter", () => {
-    configModel?.focusSensor(familyOf(key), sideOf(key), SENSOR_NAMES[familyOf(key)]);
+    configModel?.focusSensor(familyOf(key), sideOf(key));
   });
   row.addEventListener("pointerleave", () => configModel?.clearFocus());
 });
