@@ -572,8 +572,12 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 
      `relative` und nicht `static`: Das Feld des Modells hängt mit `inset: 0`
      an der Bühne. Ohne einen Bezug spannte es sich über die ganze Seite, und
-     das Modell sässe in deren Mitte statt auf der Bühne. */
-  .device-stage { position: relative; height: 68vh; min-height: 380px; }
+     das Modell sässe in deren Mitte statt auf der Bühne. Dazu gehört
+     `top: auto`: Die Bühne trägt den Wert 140 fürs Kleben, und `relative`
+     nimmt ihn ernst – sie rückte sonst um diesen Betrag nach unten, liesse
+     eine Lücke unter den Reitern und legte sich über die Werte darunter.
+     `static` hatte ihn schlicht ignoriert. */
+  .device-stage { position: relative; top: auto; height: 68vh; min-height: 380px; }
 }
 
 @media (max-width: 640px) {
