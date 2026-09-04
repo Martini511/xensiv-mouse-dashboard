@@ -568,8 +568,12 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
      jetzt ausfüllt statt sie aufzuspannen, gibt erst diese Höhe ihr Mass –
      und deckelt sie zugleich, damit die Zahlen darunter im Bild bleiben.
      Kleben würde hier zwei Drittel des Bildes dauerhaft belegen – also
-     bleibt die Bühne stehen, wo sie steht. */
-  .device-stage { position: static; height: 68vh; min-height: 380px; }
+     bleibt die Bühne stehen, wo sie steht.
+
+     `relative` und nicht `static`: Das Feld des Modells hängt mit `inset: 0`
+     an der Bühne. Ohne einen Bezug spannte es sich über die ganze Seite, und
+     das Modell sässe in deren Mitte statt auf der Bühne. */
+  .device-stage { position: relative; height: 68vh; min-height: 380px; }
 }
 
 @media (max-width: 640px) {
