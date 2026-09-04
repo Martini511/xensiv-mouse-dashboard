@@ -587,7 +587,27 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
   .tabs { position: static; overflow-x: auto; height: 58px; gap: 22px; padding: 0 18px; }
   .tabs button { flex: 0 0 auto; }
   .panel { padding: 30px 18px 48px; }
+  /* Die Bühne bleibt randlos. Ohne diese Zeile gäbe ihr die Regel darüber
+     einen Rand, den sie auf keiner anderen Breite hat. */
+  .panel-stage { padding: 0; }
   .stage-main { padding: 30px 18px 48px; }
+
+  /* Auf dem Telefon liegen Beschriftung und Messzeilen nicht mehr über dem
+     Modell, sondern darüber und darunter: Auf so wenig Fläche verdeckten sie
+     sonst gerade das, was sie erklären. Das Feld reiht sich dazu einfach ein,
+     statt über der Bühne zu schweben – und die Bühne nimmt die Höhe, die
+     dabei herauskommt, statt einen Anteil des Bildschirms zu belegen. */
+  .stage-label { padding: 18px 18px 10px; }
+  .stage-readout { padding: 10px 18px 18px; background: none; }
+  .device-stage { height: auto; min-height: 0; }
+  .mouse-stage { position: relative; padding: 0 18px; }
+  /* Das Zeichenfeld spannt die Bühne jetzt auf, statt sie auszufüllen. Ohne
+     ein eigenes Verhältnis hätte es keine Höhe; das Quadrat gibt dem Modell
+     zugleich die Freiheit, sich in jede Richtung zu drehen, ohne dass es
+     dabei wächst und schrumpft. Die Obergrenze hält es kleiner als den
+     Bildschirm: Die Maus ist hier ein Schaustück, keine Titelseite. */
+  .mouse-canvas { place-self: center; width: 100%; max-width: 260px; height: auto; aspect-ratio: 1 / 1; }
+  .mouse-svg { max-width: 150px; }
   .metric-grid, .control-grid.two-columns, .chart-grid, .calibration-fields { grid-template-columns: 1fr; }
   .control-block + .control-block { border-left: 0; border-top: 1px solid var(--line); }
   .sensor-row { grid-template-columns: 1fr 44px; padding: 14px 20px; gap: 12px; }
