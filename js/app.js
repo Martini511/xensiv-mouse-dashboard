@@ -1127,6 +1127,10 @@ function refreshTexts() {
     });
   }
   applyConfigView();
+
+  // Die Beschriftungen der Diagramme sind gezeichnet, nicht gesetzt - sie
+  // erscheinen erst beim naechsten Bild in der neuen Sprache.
+  charts.draw();
 }
 
 const languageSelect = byId("language");

@@ -55,6 +55,11 @@ const TEXTS = {
     "live.press": "Button pressure",
     "live.history": "History",
 
+    "chart.angle": "ANGLE",
+    "chart.samples": "Samples",
+    "chart.field": "X / Z FIELD",
+    "chart.path": "Magnetic path",
+
     "metric.angleCal": "ANGLE CALIBRATED",
     "metric.angleRaw": "ANGLE RAW",
     "metric.degrees": "Degrees",
@@ -239,6 +244,11 @@ const TEXTS = {
     "live.clear": "Leeren",
     "live.press": "Tastendruck",
     "live.history": "Verlauf",
+
+    "chart.angle": "WINKEL",
+    "chart.samples": "Messpunkte",
+    "chart.field": "FELD X / Z",
+    "chart.path": "Magnetbahn",
 
     "metric.angleCal": "WINKEL KALIBRIERT",
     "metric.angleRaw": "WINKEL ROH",
