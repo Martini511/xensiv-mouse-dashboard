@@ -48,7 +48,7 @@ export class WheelCharts {
 
   drawAngleChart() {
     const { context, width, height } = prepare(this.angleCanvas);
-    drawFrame(context, width, height, "WINKEL", "Messpunkte");
+    drawFrame(context, width, height, "ANGLE", "Samples");
     if (this.samples.length < 2) return;
 
     drawSeries(context, width, height,
@@ -59,7 +59,7 @@ export class WheelCharts {
 
   drawFieldChart() {
     const { context, width, height } = prepare(this.fieldCanvas);
-    drawFrame(context, width, height, "X / Z FELD", "Magnetbahn");
+    drawFrame(context, width, height, "X / Z FIELD", "Magnetic path");
     // Ein einzelner Punkt ist hier bereits eine Aussage - anders als bei der
     // Linie, die zwei Werte braucht, um ueberhaupt zu entstehen.
     if (!this.samples.length) return;
