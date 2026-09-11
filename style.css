@@ -171,23 +171,71 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
 /* Der Wach-Schalter gibt sich als Statusanzeige, nicht als Bedienelement der
    Maus: dieselbe Schrift wie Verbindung und Batterie daneben. Was er
    umstellt, betrifft die Verbindung und nicht die Konfiguration - er gehoert
-   deshalb hierher und nicht in einen der Reiter.
-
-   Fehlt die Voraussetzung, bleibt er stehen und wird blass. Ihn ganz
-   auszublenden waere bequemer, liesse aber niemanden erfahren, dass es die
-   Einstellung gibt - und der Hinweistext beim Verweilen ist genau die
-   Auskunft, die dann gebraucht wird. Der Zeiger bleibt darum `help`, nicht
-   `not-allowed`: Hier ist etwas zu lesen, nicht etwas verboten. */
+   deshalb hierher und nicht in einen der Reiter. */
 .awake-toggle {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font: 500 11px "IBM Plex Mono", monospace;
   text-transform: uppercase;
   cursor: pointer;
   user-select: none;
 }
-.awake-toggle input { width: 15px; height: 15px; accent-color: var(--accent); cursor: inherit; }
+
+/* Der Schieber ist das Kaestchen selbst, nicht eine Attrappe daneben: Ein
+   `input` mit `appearance: none` laesst sich frei zeichnen und bleibt dabei
+   ein Kontrollkaestchen - mit Tastaturbedienung, Vorlesbarkeit und dem
+   Haken, den `checked` setzt. Die uebliche Bastelei aus verstecktem Feld und
+   einem `span` daneben gibt all das auf und muss es einzeln nachbauen.
+
+   Die Form sagt, worum es geht: Ein Schieber steht fuer einen Zustand, der
+   anhaelt, ein Haken fuer eine Angabe, die man macht. Hier bleibt etwas
+   eingeschaltet, solange die Verbindung steht - also ein Schieber. */
+.awake-toggle input {
+  appearance: none;
+  flex: 0 0 auto;
+  position: relative;
+  margin: 0;
+  width: 32px;
+  height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  cursor: inherit;
+  transition: background-color .18s ease, border-color .18s ease;
+}
+
+/* Der Knopf sitzt am Rand und faehrt herueber. Gerechnet wird aus der
+   Breite: 32 innen abzueglich zweimal Rand, zweimal Abstand und der Knopf
+   selbst - so bleibt der Weg richtig, auch wenn oben eine Zahl wechselt. */
+.awake-toggle input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform .18s ease, background-color .18s ease;
+}
+
+.awake-toggle input:checked { background: var(--accent); border-color: var(--accent); }
+.awake-toggle input:checked::after { background: #fff; transform: translateX(14px); }
+.awake-toggle input:hover:not(:disabled) { border-color: var(--accent); }
+.awake-toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Der Schieber hat sich ohne diese Zeile zweimal zurueckgenommen: einmal
+   durch die Regel fuer gesperrte Felder weiter oben, einmal durch die blasse
+   Beschriftung darunter. Zusammen war er kaum noch zu sehen. Und der Zeiger
+   bleibt der der Beschriftung - dort steht der Hinweis, der hier fehlt. */
+.awake-toggle input:disabled { opacity: 1; cursor: inherit; }
+
+/* Fehlt die Voraussetzung, bleibt der Schalter stehen und wird blass. Ihn
+   ganz auszublenden waere bequemer, liesse aber niemanden erfahren, dass es
+   die Einstellung gibt - und der Hinweistext beim Verweilen ist genau die
+   Auskunft, die dann gebraucht wird. Der Zeiger bleibt darum `help`, nicht
+   `not-allowed`: Hier ist etwas zu lesen, nicht etwas verboten. */
 .awake-toggle:not([data-state="ready"]) { color: var(--muted); opacity: .55; cursor: help; }
 
 /* ─── Schaltflächen ──────────────────────────────── */
