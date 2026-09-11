@@ -122,6 +122,10 @@ function liveTabActive() {
 
 connectButton.addEventListener("click", async () => {
   if (mouse.connected) {
+    // Erst den Schlaf zurueckgeben, dann trennen. Danach ginge es nicht
+    // mehr: Der Weg zur Maus fuehrt ueber genau die Verbindung, die hier
+    // gekappt wird.
+    await restoreSleep();
     mouse.disconnect();
     return;
   }
@@ -190,6 +194,13 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
   }
 
   notify(t("msg.connected"));
+
+  // Die Maus steht nach jedem Einschalten wieder auf "Schlaf erlaubt" - sie
+  // merkt sich die Abschaltung nicht. Der Wunsch der Seite muss deshalb bei
+  // jeder Verbindung neu hinuebergehen, nicht nur beim ersten Mal.
+  updateSleepAvailability();
+  await applySleepSetting(true);
+
   previewLed(byId("led-color").value);
   if (liveTabActive()) startMonitoring();
 });
@@ -202,6 +213,13 @@ mouse.addEventListener("disconnected", ({ detail }) => {
   setConnectionState("offline", "state.offline");
   setConnectButton("header.connect");
   batteryLabel.textContent = "--";
+
+  // Der Haken bleibt stehen, der Schalter wird unbedienbar: Er sagt jetzt,
+  // was beim naechsten Verbinden geschehen soll, nicht mehr, was gerade im
+  // Geraet gilt. Ihn zurueckzusetzen hiesse, den Wunsch bei jedem
+  // Verbindungsabbruch zu vergessen - gerade dann, wenn er sich bewaehrt
+  // haette.
+  updateSleepAvailability();
 
   // Die Seite steht ab hier bereit fuer eine neue Verbindung, nicht fuer
   // die Fortsetzung der alten. Der Knopf zum Neuaufbau gehoert deshalb
@@ -243,8 +261,19 @@ document.addEventListener("visibilitychange", () => {
 
 // Ohne ausdrückliche Freigabe bleibt der Kanal nach einem Neuladen
 // belegt und die Maus verweigert jeden neuen Zugriff.
-window.addEventListener("pagehide", () => mouse.release());
-window.addEventListener("beforeunload", () => mouse.release());
+//
+// Der Schlaf geht dabei mit hinaus, aber ohne Gewähr: Beim Verlassen der
+// Seite bleibt keine Zeit, auf die Antwort zu warten. Kommt der Befehl nicht
+// mehr durch, bleibt die Maus wach, bis sie das nächste Mal aus- und wieder
+// eingeschaltet wird – unschön für die Batterie, aber nicht zu verhindern.
+window.addEventListener("pagehide", () => {
+  restoreSleep();
+  mouse.release();
+});
+window.addEventListener("beforeunload", () => {
+  restoreSleep();
+  mouse.release();
+});
 
 // Der Browser legt Seiten beiseite und holt sie wieder hervor, ohne sie neu
 // zu laden. Dann ist der Kanal freigegeben, aber niemand hat ihn wieder
@@ -252,6 +281,93 @@ window.addEventListener("beforeunload", () => mouse.release());
 window.addEventListener("pageshow", ({ persisted }) => {
   if (persisted) mouse.resume();
 });
+
+// ─── Ruhezustand ──────────────────────────────────────
+//
+// Die Maus legt sich nach einer Weile ohne Bewegung schlafen und trennt dabei
+// die Funkstrecke. Mitten in einer Sitzung ist das mehr als lästig: Der
+// Browser gibt ein abgemeldetes Gerät nicht von selbst wieder frei, jede
+// Rückkehr kostet also einen Gang durch den Auswahldialog. Solange diese
+// Seite offen ist, schaltet sie den Schlaf deshalb ab.
+//
+// Abgeschaltet heißt nicht wachgerüttelt: Die Firmware überspringt allein
+// Leicht- und Tiefschlaf. Das Atmen der Beleuchtung läuft weiter, und alles
+// andere bleibt, wie es war.
+//
+// Der Befehl liegt auf dem HID-Feature-Report. Über Web Bluetooth ist er
+// nicht zu erreichen – der HID-Dienst steht auf der Sperrliste des Browsers,
+// damit keine Seite heimlich Tastatureingaben mitliest. Läuft die Seite über
+// GATT, bleibt der Schalter deshalb stehen und sagt beim Verweilen, warum.
+
+const keepAwakeField = byId("keep-awake-field");
+const keepAwakeBox = byId("keep-awake");
+
+keepAwakeBox.addEventListener("change", () => applySleepSetting());
+
+// Der Schalter sagt, was die Seite will; das Gerät sagt, was gilt. Nach dem
+// Schreiben wird deshalb nachgefragt und die Anzeige auf die Antwort gesetzt
+// – sonst stünde hier ein Haken für eine Einstellung, die die Maus nie
+// übernommen hat, und der Nutzer wartete auf eine Verbindung, die trotzdem
+// abbricht.
+async function applySleepSetting(quiet = false) {
+  if (!mouse.sleepControl || !mouse.connected) return;
+
+  const sleepEnabled = !keepAwakeBox.checked;
+
+  try {
+    await mouse.setSleepEnabled(sleepEnabled);
+    if (await mouse.readSleepEnabled() !== sleepEnabled) {
+      throw new Error(t("error.sleepRejected"));
+    }
+    if (!quiet) notify(t(sleepEnabled ? "msg.awakeOff" : "msg.awakeOn"));
+  } catch (error) {
+    await showSleepSetting();
+    showError(new Error(t("msg.awakeFailed", { error: error.message })));
+  }
+}
+
+async function showSleepSetting() {
+  try {
+    keepAwakeBox.checked = !(await mouse.readSleepEnabled());
+  } catch {
+    // Verbindung weg oder Firmware ohne diesen Befehl – dann bleibt der
+    // Schalter stehen, wie er stand. Eine zweite Meldung daneben erklärte
+    // nichts, was die erste nicht schon gesagt hat.
+  }
+}
+
+// Beim Trennen bekommt die Maus ihren Schlaf zurück. Die Firmware merkt sich
+// die Abschaltung nicht, holt sie aber erst beim nächsten Einschalten zurück
+// – und bis dahin kann viel Zeit vergehen, in der eine wache Maus in der
+// Schublade ihre Batterie leert.
+function restoreSleep() {
+  if (!mouse.sleepControl || !mouse.connected) return Promise.resolve();
+
+  // Scheitert es, ist die Verbindung ohnehin schon fort. Eine Meldung darüber
+  // im Moment des Trennens beantwortete eine Frage, die niemand gestellt hat.
+  return mouse.setSleepEnabled(true).catch(() => {});
+}
+
+// Zwei Bedingungen, zwei verschiedene Auskünfte: Über GATT gibt es die
+// Einstellung grundsätzlich nicht, ohne Verbindung nur gerade jetzt nicht.
+// Beides sieht gleich aus – ein blasser Schalter –, und ohne den Hinweis
+// dahinter bliebe offen, ob Warten hilft oder nur ein anderer Browser.
+function updateSleepAvailability() {
+  const supported = Boolean(mouse.sleepControl);
+  const usable = supported && mouse.connected;
+
+  keepAwakeBox.disabled = !usable;
+  keepAwakeField.dataset.state =
+    !supported ? "unsupported" : usable ? "ready" : "offline";
+
+  // Der Hinweis wird als Schlüssel hinterlegt, nicht als fertiger Text: So
+  // schreibt ihn der Sprachwechsel von selbst um, ohne dass diese Stelle
+  // davon wissen muss.
+  keepAwakeField.dataset.i18nTitle =
+    !supported ? "awake.unavailable"
+      : usable ? "awake.title" : "awake.needsConnection";
+  keepAwakeField.title = t(keepAwakeField.dataset.i18nTitle);
+}
 
 // ─── Live-Überwachung ─────────────────────────────────
 // Läuft, solange der Reiter offen und die Maus verbunden ist.
@@ -1154,6 +1270,7 @@ translate();
 
 buildPressBars();
 setDeviceControls(false);
+updateSleepAvailability();
 showActiveSensors();
 labelSensorBoxes();
 previewLed(byId("led-color").value);

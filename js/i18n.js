@@ -30,6 +30,19 @@ const TEXTS = {
     "brand.sub": "Configuration console",
     "battery.title": "Battery level",
     "lang.aria": "Language",
+    "awake.label": "Keep awake",
+    "awake.aria": "Keep awake while connected",
+    "awake.title": "Keep awake while connected. The mouse then skips its "
+      + "light and deep sleep stages, so the link is not dropped mid-session. "
+      + "The idle lighting keeps breathing. The setting is not stored in the "
+      + "device and returns to normal sleep on the next power cycle.",
+    "awake.unavailable": "Requires WebHID. This command travels on the HID "
+      + "feature report, which Web Bluetooth cannot reach \u2013 the HID "
+      + "service is on the browser blocklist. Please use a current Chrome or "
+      + "Edge over HTTPS and pair the mouse as a HID device.",
+    "awake.needsConnection": "Connect the mouse first. WebHID asks for the "
+      + "device in its own picker, so the setting can only be sent once that "
+      + "permission has been granted.",
     "header.reconnect": "Reconnect",
     "header.connect": "Connect mouse",
     "header.disconnect": "Disconnect",
@@ -161,6 +174,9 @@ const TEXTS = {
     "msg.noTransport": "Neither WebHID nor Web Bluetooth is available. Please "
       + "use a current Chrome, Edge or Opera over HTTPS or localhost.",
     "msg.connected": "Mouse connected",
+    "msg.awakeOn": "Sleep mode switched off \u2013 the mouse stays connected",
+    "msg.awakeOff": "Sleep mode switched on again",
+    "msg.awakeFailed": "Sleep mode could not be changed: {error}",
     "msg.lost": "The connection to the mouse was lost \u2013 most likely sleep "
       + "mode. The browser does not release a mouse that has signed off "
       + "again on its own; please connect anew.",
@@ -199,6 +215,7 @@ const TEXTS = {
     "error.noneReleased": "No mouse has been released yet.",
     "error.notConnected": "The mouse is not connected",
     "error.timeout": "The mouse did not answer – most likely sleep mode",
+    "error.sleepRejected": "The mouse still reports the old setting",
 
     "error.payloadTooBig": "Payload does not fit into the feature report",
     "error.wrongLength": "Answer has {actual} instead of {expected} bytes",
@@ -220,6 +237,22 @@ const TEXTS = {
     "brand.sub": "Konfigurationskonsole",
     "battery.title": "Batteriestand",
     "lang.aria": "Sprache",
+    "awake.label": "Wach halten",
+    "awake.aria": "W\u00e4hrend der Verbindung wach halten",
+    "awake.title": "W\u00e4hrend der Verbindung wach halten. Die Maus "
+      + "\u00fcberspringt dann ihre beiden Schlafstufen, und die Verbindung "
+      + "bricht nicht mitten in der Sitzung ab. Das Atmen der Beleuchtung "
+      + "l\u00e4uft weiter. Die Einstellung liegt nicht im Ger\u00e4t: Nach "
+      + "dem n\u00e4chsten Einschalten schl\u00e4ft die Maus wieder wie "
+      + "gewohnt.",
+    "awake.unavailable": "Ben\u00f6tigt WebHID. Dieser Befehl l\u00e4uft "
+      + "\u00fcber den HID-Feature-Report, und den erreicht Web Bluetooth "
+      + "nicht \u2013 der HID-Dienst steht auf der Sperrliste des Browsers. "
+      + "Bitte aktuelles Chrome oder Edge \u00fcber HTTPS verwenden und die "
+      + "Maus als HID-Ger\u00e4t koppeln.",
+    "awake.needsConnection": "Zuerst die Maus verbinden. WebHID fragt das "
+      + "Ger\u00e4t in einem eigenen Auswahldialog ab; die Einstellung "
+      + "l\u00e4sst sich erst danach senden.",
     "header.reconnect": "Neu verbinden",
     "header.connect": "Maus verbinden",
     "header.disconnect": "Trennen",
@@ -354,6 +387,9 @@ const TEXTS = {
       + "Verf\u00fcgung. Bitte ein aktuelles Chrome, Edge oder Opera \u00fcber HTTPS "
       + "oder localhost nutzen.",
     "msg.connected": "Maus verbunden",
+    "msg.awakeOn": "Ruhezustand abgeschaltet \u2013 die Maus bleibt verbunden",
+    "msg.awakeOff": "Ruhezustand wieder eingeschaltet",
+    "msg.awakeFailed": "Ruhezustand lie\u00df sich nicht umstellen: {error}",
     "msg.lost": "Die Verbindung zur Maus ist verloren \u2013 vermutlich "
       + "Ruhezustand. Eine abgemeldete Maus gibt der Browser nicht von selbst "
       + "wieder frei; bitte neu verbinden.",
@@ -392,6 +428,7 @@ const TEXTS = {
     "error.noneReleased": "Es ist noch keine Maus freigegeben.",
     "error.notConnected": "Die Maus ist nicht verbunden",
     "error.timeout": "Die Maus hat nicht geantwortet – vermutlich Ruhezustand",
+    "error.sleepRejected": "Die Maus meldet weiterhin die alte Einstellung",
 
     "error.payloadTooBig": "Nutzdaten passen nicht in den Feature-Report",
     "error.wrongLength": "Antwort hat {actual} statt {expected} Byte",

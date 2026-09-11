@@ -168,6 +168,28 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .42; }
 .battery-icon { width: 19px; height: 10px; border: 1px solid currentColor; position: relative; }
 .battery-icon::after { content: ""; position: absolute; right: -4px; top: 2px; width: 2px; height: 4px; background: currentColor; }
 
+/* Der Wach-Schalter gibt sich als Statusanzeige, nicht als Bedienelement der
+   Maus: dieselbe Schrift wie Verbindung und Batterie daneben. Was er
+   umstellt, betrifft die Verbindung und nicht die Konfiguration - er gehoert
+   deshalb hierher und nicht in einen der Reiter.
+
+   Fehlt die Voraussetzung, bleibt er stehen und wird blass. Ihn ganz
+   auszublenden waere bequemer, liesse aber niemanden erfahren, dass es die
+   Einstellung gibt - und der Hinweistext beim Verweilen ist genau die
+   Auskunft, die dann gebraucht wird. Der Zeiger bleibt darum `help`, nicht
+   `not-allowed`: Hier ist etwas zu lesen, nicht etwas verboten. */
+.awake-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 500 11px "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+}
+.awake-toggle input { width: 15px; height: 15px; accent-color: var(--accent); cursor: inherit; }
+.awake-toggle:not([data-state="ready"]) { color: var(--muted); opacity: .55; cursor: help; }
+
 /* ─── Schaltflächen ──────────────────────────────── */
 
 .primary-button, .secondary-button, .text-button {
@@ -588,6 +610,10 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
      vor allem verlorene Höhe. */
   .app-header { position: static; height: auto; min-height: 74px; padding: 12px 16px; }
   .connection-label, .battery { display: none; }
+  /* Der Wach-Schalter bleibt: Er ist das einzige Bedienelement dieser Zeile,
+     das nicht bloss anzeigt. Seine Beschriftung tritt zurueck, das
+     Kaestchen genuegt - der Hinweistext steht weiter dahinter. */
+  .awake-toggle span { display: none; }
   .tabs { position: static; overflow-x: auto; height: 58px; gap: 22px; padding: 0 18px; }
   .tabs button { flex: 0 0 auto; }
   .panel { padding: 30px 18px 48px; }
