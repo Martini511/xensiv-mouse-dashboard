@@ -32,8 +32,6 @@ const COMMAND = Object.freeze({
   setWheelCalibration: 8,
   startWheelCalibration: 9,
   getBattery: 10,
-  setSleepEnabled: 11,
-  getSleepEnabled: 12,
 });
 
 const STATUS_MESSAGES = [
@@ -92,15 +90,6 @@ export class XensivMouseHid extends EventTarget {
 
   get available() {
     return typeof navigator.hid?.requestDevice === "function";
-  }
-
-  // Den Schlaf der Maus abzuschalten geht nur hier. Der Befehl liegt auf
-  // demselben Feature-Report wie alles andere, und den erreicht Web
-  // Bluetooth nicht: Der HID-Dienst 0x1812 steht auf der Sperrliste des
-  // Browsers. Der GATT-Zweig sagt deshalb nein - und die Oberflaeche fragt
-  // hier nach, statt es am Transport zu erraten.
-  get sleepControl() {
-    return true;
   }
 
   // ─── Verbindungsaufbau ──────────────────────────────
@@ -299,34 +288,6 @@ export class XensivMouseHid extends EventTarget {
 
   async readBattery() {
     return (await this.command(COMMAND.getBattery)).getUint8(0);
-  }
-
-  // Abgeschaltet wird nur der Schlaf, nicht die Ruhe: Das Atmen der LED
-  // laeuft weiter, es entfallen allein die beiden Stufen, die stoeren -
-  // LIGHT_SLEEP lockert die Verbindungsparameter, DEEP_SLEEP trennt die
-  // Funkstrecke. Schlaeft die Maus schon, weckt dieser Befehl sie auf.
-  //
-  // Die Einstellung ueberlebt keinen Stromausfall. Die Maus steht nach
-  // jedem Einschalten wieder auf "Schlaf erlaubt" - deshalb muss die Seite
-  // sie bei jedem Verbindungsaufbau neu setzen, nicht nur einmal.
-  async setSleepEnabled(enabled) {
-    await this.command(COMMAND.setSleepEnabled, Uint8Array.of(enabled ? 1 : 0));
-  }
-
-  async readSleepEnabled() {
-    const answer = await this.command(COMMAND.getSleepEnabled);
-
-    // Eine aeltere Firmware kennt den Befehl nicht und antwortet mit einem
-    // Status - den faengt `executeCommand` ab. Eine, die ihn kennt, aber
-    // nichts zurueckgibt, kaeme hier ohne Byte an: `getUint8` wuerfe dann
-    // einen Bereichsfehler, dem niemand ansieht, worum es ging.
-    if (answer.byteLength < 1) {
-      throw new Error(t("error.shortValue", {
-        what: t("awake.label"), actual: answer.byteLength, expected: 1,
-      }));
-    }
-
-    return Boolean(answer.getUint8(0));
   }
 
   // ─── Übertragung ────────────────────────────────────
