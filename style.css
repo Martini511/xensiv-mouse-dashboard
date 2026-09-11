@@ -486,6 +486,71 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .control-block { min-width: 0; padding: 26px; }
 .control-block + .control-block { border-left: 1px solid var(--line); }
 
+/* ─── Schieber ───────────────────────────────────── */
+
+.switch-control { border: 1px solid var(--line); }
+.switch-row { display: flex; align-items: center; gap: 16px; cursor: pointer; }
+.switch-text { display: grid; gap: 3px; }
+.switch-text strong { font-size: 15px; font-weight: 600; }
+.switch-text small { color: var(--muted); font-size: 12px; }
+
+/* Gezeichnet wird das Kaestchen selbst. Ein `input` mit `appearance: none`
+   laesst sich frei gestalten und bleibt dabei ein Kontrollkaestchen - mit
+   Tastaturbedienung, Vorlesbarkeit und dem Zustand, den `checked` fuehrt. Die
+   uebliche Bastelei aus verstecktem Feld und einem `span` daneben gibt all
+   das auf und muss es einzeln nachbauen.
+
+   Die Form sagt, worum es geht: Ein Schieber steht fuer einen Zustand, der
+   anhaelt, ein Haken fuer eine Angabe, die man macht. Hier bleibt etwas
+   eingeschaltet - im Flash der Maus sogar ueber das Ausschalten hinaus. */
+.switch-row input {
+  appearance: none;
+  flex: 0 0 auto;
+  position: relative;
+  margin: 0;
+  width: 44px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: inherit;
+  transition: background-color .18s ease, border-color .18s ease;
+}
+
+/* Der Knopf faehrt von einem Rand zum anderen. Der Weg ist die Breite
+   abzueglich zweimal Rand, zweimal Abstand und des Knopfes selbst - so bleibt
+   er richtig, auch wenn oben eine Zahl wechselt. */
+.switch-row input::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform .18s ease, background-color .18s ease;
+}
+
+.switch-row input:checked { background: var(--accent); border-color: var(--accent); }
+.switch-row input:checked::after { background: #fff; transform: translateX(20px); }
+.switch-row input:hover:not(:disabled) { border-color: var(--accent); }
+.switch-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Der Schieber nahm sich ohne diese Zeile zweimal zurueck: durch die Regel
+   fuer gesperrte Felder weiter oben und durch die blasse Umgebung darunter.
+   Zusammen war er kaum noch zu sehen. Und der Zeiger bleibt der der
+   Beschriftung - dort steht der Hinweis, der hier fehlt. */
+.switch-row input:disabled { opacity: 1; cursor: inherit; }
+
+/* Fehlt die Voraussetzung, bleibt der Schalter stehen und wird blass. Ihn
+   auszublenden waere bequemer, liesse aber niemanden erfahren, dass es die
+   Einstellung ueberhaupt gibt - und der Hinweis beim Verweilen ist genau die
+   Auskunft, die dann gebraucht wird. Der Zeiger bleibt darum `help`, nicht
+   `not-allowed`: Hier ist etwas zu lesen, nicht etwas verboten. */
+.switch-control:not([data-state="ready"]) { color: var(--muted); cursor: help; }
+.switch-control:not([data-state="ready"]) .switch-row { opacity: .55; cursor: inherit; }
+
 .color-control { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; }
 .color-preview { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
 .color-preview span { width: 48px; height: 48px; background: var(--accent-soft); border: 5px solid #fff; outline: 1px solid var(--line); }

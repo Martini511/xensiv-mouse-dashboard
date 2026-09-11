@@ -134,6 +134,32 @@ const TEXTS = {
       + "shows the mark a hundred units lower: the mouse clicks that much "
       + "earlier than the stored value suggests.",
 
+    "acc.sleep.title": "Sleep mode",
+    "acc.sleep.sub": "Power saving after inactivity",
+    "sleep.label": "Sleep mode",
+    "sleep.aria": "Sleep mode of the mouse",
+    "sleep.on": "On \u2013 the mouse sleeps after a while without movement",
+    "sleep.off": "Off \u2013 the mouse never goes to sleep on its own",
+    "sleep.unknown": "Not read from the mouse yet",
+    "sleep.needsConnection": "Connect the mouse first. The setting is read "
+      + "from the device, not remembered by this page.",
+    "sleep.unavailable": "Requires WebHID. This setting travels on the HID "
+      + "feature report, which Web Bluetooth cannot reach \u2013 the HID service "
+      + "is on the browser blocklist. Please use a current Chrome or Edge over "
+      + "HTTPS and pair the mouse as a HID device.",
+    "sleep.hint": "The setting is stored in the mouse: it survives "
+      + "disconnecting and a reboot, and this page only reads it back. "
+      + "Switched off, the mouse never goes to sleep on its own, which "
+      + "noticeably shortens battery life. Independently of this, sleep stays "
+      + "suspended for as long as the dashboard is connected \u2013 otherwise the "
+      + "mouse would drop the connection mid-session. That suspension is not "
+      + "stored and lapses by itself once this page lets go.",
+    "sleep.confirm": "Switching sleep mode off is stored in the mouse. It "
+      + "stays off after disconnecting and after a reboot, and the mouse then "
+      + "never goes to sleep on its own \u2013 which noticeably shortens battery "
+      + "life.\n\nThe connection does not need this: sleep is suspended anyway "
+      + "for as long as this page is connected.\n\nSwitch sleep mode off?",
+
     "sensor.leftForce": "Left Force",
     "sensor.leftTmr2d": "Left 2D TMR",
     "sensor.leftHall": "Left Hall",
@@ -161,6 +187,10 @@ const TEXTS = {
     "msg.noTransport": "Neither WebHID nor Web Bluetooth is available. Please "
       + "use a current Chrome, Edge or Opera over HTTPS or localhost.",
     "msg.connected": "Mouse connected",
+    "msg.sleepOn": "Sleep mode switched on \u2013 stored in the mouse",
+    "msg.sleepOff": "Sleep mode switched off \u2013 stored in the mouse",
+    "msg.sleepFailed": "Sleep mode could not be changed: {error}",
+    "msg.sleepUnreadable": "Sleep mode not readable: {error}",
     "msg.lost": "The connection to the mouse was lost \u2013 most likely sleep "
       + "mode. The browser does not release a mouse that has signed off "
       + "again on its own; please connect anew.",
@@ -199,6 +229,7 @@ const TEXTS = {
     "error.noneReleased": "No mouse has been released yet.",
     "error.notConnected": "The mouse is not connected",
     "error.timeout": "The mouse did not answer – most likely sleep mode",
+    "error.sleepRejected": "The mouse still reports the old setting",
 
     "error.payloadTooBig": "Payload does not fit into the feature report",
     "error.wrongLength": "Answer has {actual} instead of {expected} bytes",
@@ -326,6 +357,34 @@ const TEXTS = {
       + "zeigt die Marke hundert Einheiten tiefer: So viel fr\u00fcher klickt die "
       + "Maus, als der gespeicherte Wert vermuten l\u00e4sst.",
 
+    "acc.sleep.title": "Ruhezustand",
+    "acc.sleep.sub": "Stromsparen nach Untaetigkeit",
+    "sleep.label": "Ruhezustand",
+    "sleep.aria": "Ruhezustand der Maus",
+    "sleep.on": "Ein \u2013 die Maus schl\u00e4ft nach einer Weile ohne Bewegung",
+    "sleep.off": "Aus \u2013 die Maus schl\u00e4ft nie von selbst ein",
+    "sleep.unknown": "Noch nicht aus der Maus gelesen",
+    "sleep.needsConnection": "Zuerst die Maus verbinden. Die Einstellung "
+      + "kommt aus dem Ger\u00e4t und wird von dieser Seite nicht gemerkt.",
+    "sleep.unavailable": "Ben\u00f6tigt WebHID. Diese Einstellung l\u00e4uft \u00fcber den "
+      + "HID-Feature-Report, und den erreicht Web Bluetooth nicht \u2013 der "
+      + "HID-Dienst steht auf der Sperrliste des Browsers. Bitte aktuelles "
+      + "Chrome oder Edge \u00fcber HTTPS verwenden und die Maus als HID-Ger\u00e4t "
+      + "koppeln.",
+    "sleep.hint": "Die Einstellung liegt in der Maus: Sie \u00fcberdauert das "
+      + "Trennen und den Neustart, und diese Seite liest sie nur zur\u00fcck. "
+      + "Abgeschaltet schl\u00e4ft die Maus nie von selbst ein, was die Laufzeit "
+      + "sp\u00fcrbar verk\u00fcrzt. Davon unabh\u00e4ngig bleibt der Ruhezustand "
+      + "ausgesetzt, solange das Dashboard verbunden ist \u2013 sonst risse die "
+      + "Maus die Verbindung mitten in der Sitzung ab. Dieses Aussetzen liegt "
+      + "nirgends und f\u00e4llt von selbst weg, sobald diese Seite losl\u00e4sst.",
+    "sleep.confirm": "Den Ruhezustand abzuschalten wird in der Maus "
+      + "gespeichert. Er bleibt nach dem Trennen und nach einem Neustart aus, "
+      + "und die Maus schl\u00e4ft dann nie von selbst ein \u2013 was die Laufzeit "
+      + "sp\u00fcrbar verk\u00fcrzt.\n\nF\u00fcr die Verbindung ist das nicht n\u00f6tig: Der "
+      + "Ruhezustand ist ohnehin ausgesetzt, solange diese Seite verbunden "
+      + "ist.\n\nRuhezustand abschalten?",
+
     "sensor.leftForce": "Links Force",
     "sensor.leftTmr2d": "Links 2D TMR",
     "sensor.leftHall": "Links Hall",
@@ -354,6 +413,10 @@ const TEXTS = {
       + "Verf\u00fcgung. Bitte ein aktuelles Chrome, Edge oder Opera \u00fcber HTTPS "
       + "oder localhost nutzen.",
     "msg.connected": "Maus verbunden",
+    "msg.sleepOn": "Ruhezustand eingeschaltet \u2013 in der Maus gespeichert",
+    "msg.sleepOff": "Ruhezustand abgeschaltet \u2013 in der Maus gespeichert",
+    "msg.sleepFailed": "Ruhezustand lie\u00df sich nicht umstellen: {error}",
+    "msg.sleepUnreadable": "Ruhezustand nicht lesbar: {error}",
     "msg.lost": "Die Verbindung zur Maus ist verloren \u2013 vermutlich "
       + "Ruhezustand. Eine abgemeldete Maus gibt der Browser nicht von selbst "
       + "wieder frei; bitte neu verbinden.",
@@ -392,6 +455,7 @@ const TEXTS = {
     "error.noneReleased": "Es ist noch keine Maus freigegeben.",
     "error.notConnected": "Die Maus ist nicht verbunden",
     "error.timeout": "Die Maus hat nicht geantwortet – vermutlich Ruhezustand",
+    "error.sleepRejected": "Die Maus meldet weiterhin die alte Einstellung",
 
     "error.payloadTooBig": "Nutzdaten passen nicht in den Feature-Report",
     "error.wrongLength": "Antwort hat {actual} statt {expected} Byte",

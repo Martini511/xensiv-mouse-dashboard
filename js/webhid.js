@@ -32,6 +32,9 @@ const COMMAND = Object.freeze({
   setWheelCalibration: 8,
   startWheelCalibration: 9,
   getBattery: 10,
+  setSleepEnabled: 11,
+  getSleepEnabled: 12,
+  setKeepAwake: 13,
 });
 
 const STATUS_MESSAGES = [
@@ -90,6 +93,15 @@ export class XensivMouseHid extends EventTarget {
 
   get available() {
     return typeof navigator.hid?.requestDevice === "function";
+  }
+
+  // Den Ruhezustand steuert nur dieser Weg. Die Befehle liegen auf demselben
+  // Feature-Report wie alles andere, und den erreicht Web Bluetooth nicht:
+  // Der HID-Dienst 0x1812 steht auf der Sperrliste des Browsers. Der
+  // GATT-Zweig sagt deshalb nein, und die Oberflaeche fragt hier nach, statt
+  // es am Transport zu erraten.
+  get sleepControl() {
+    return true;
   }
 
   // ─── Verbindungsaufbau ──────────────────────────────
@@ -288,6 +300,48 @@ export class XensivMouseHid extends EventTarget {
 
   async readBattery() {
     return (await this.command(COMMAND.getBattery)).getUint8(0);
+  }
+
+  // ─── Ruhezustand ────────────────────────────────────
+  //
+  // Zwei Dinge, die auseinandergehalten gehoeren, auch wenn sie dasselbe
+  // bewirken koennen:
+  //
+  // Die Einstellung (11/12) ist der Wille des Nutzers. Sie liegt im Flash,
+  // uebersteht Trennung und Neustart und wird nur dann angefasst, wenn er den
+  // Schalter umlegt.
+  //
+  // Die Freistellung (13) ist eine Bitte auf Zeit: "nicht, solange ich dran
+  // bin". Sie liegt nirgends, faellt beim Trennen weg und laeuft nach einer
+  // Minute von selbst aus, wenn sie niemand erneuert.
+  //
+  // Die Maus schlaeft, wenn die Einstellung es erlaubt UND keine Freistellung
+  // besteht. Wer die Sitzung mit 11 wachhalten wollte, ueberschriebe dabei
+  // lautlos die gespeicherte Einstellung - und der Nutzer faende seine Maus
+  // Wochen spaeter leer vor, ohne je etwas umgestellt zu haben.
+
+  async setSleepEnabled(enabled) {
+    await this.command(COMMAND.setSleepEnabled, Uint8Array.of(enabled ? 1 : 0));
+  }
+
+  async readSleepEnabled() {
+    const answer = await this.command(COMMAND.getSleepEnabled);
+
+    // Eine Firmware, die den Befehl nicht kennt, antwortet mit einem Status -
+    // den faengt `executeCommand` ab. Eine, die ihn kennt, aber nichts
+    // zurueckgibt, kaeme hier ohne Byte an: `getUint8` wuerfe dann einen
+    // Bereichsfehler, dem niemand ansieht, worum es ging.
+    if (answer.byteLength < 1) {
+      throw new Error(t("error.shortValue", {
+        what: t("acc.sleep.title"), actual: answer.byteLength, expected: 1,
+      }));
+    }
+
+    return Boolean(answer.getUint8(0));
+  }
+
+  async setKeepAwake(hold) {
+    await this.command(COMMAND.setKeepAwake, Uint8Array.of(hold ? 1 : 0));
   }
 
   // ─── Übertragung ────────────────────────────────────

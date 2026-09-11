@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=106">
+  <link rel="stylesheet" href="./style.css?v=107">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -332,6 +332,46 @@
           the mouse clicks that much earlier than the stored value suggests.</p>
         </div>
       </details>
+
+      <!-- Der Ruhezustand steht hier und nicht in der Kopfzeile: Die
+           Einstellung liegt im Flash der Maus und ueberdauert Trennung und
+           Neustart. Sie gehoert damit zu dem, was man am Geraet einstellt,
+           nicht zu dem, was fuer diese Sitzung gilt.
+
+           Das Wachhalten waehrend der Sitzung ist etwas anderes und hat
+           deshalb auch kein Bedienelement: Es laeuft von selbst, solange die
+           Seite verbunden ist, und ruehrt die Einstellung nicht an. -->
+      <details class="accordion" name="config" data-view="light">
+        <summary>
+          <span class="accordion-index">05</span>
+          <span class="accordion-title"><span data-i18n="acc.sleep.title">Sleep mode</span><small data-i18n="acc.sleep.sub">Power saving after inactivity</small></span>
+        </summary>
+        <div class="accordion-body">
+          <!-- Kein `data-device-control`: Das Skript schaltet den Schalter
+               selbst frei, und zwar nach zwei Bedingungen statt einer - der
+               Transport muss WebHID sein und die Maus verbunden. Die
+               Sammelschaltung wuesste nur von der zweiten und machte ihn im
+               GATT-Betrieb bedienbar, obwohl dort nichts ankaeme. -->
+          <section class="control-block switch-control" id="sleep-field" data-state="unsupported">
+            <label class="switch-row">
+              <input id="sleep-enabled" type="checkbox" checked disabled
+                     data-i18n-aria="sleep.aria" aria-label="Sleep mode">
+              <span class="switch-text">
+                <strong data-i18n="sleep.label">Sleep mode</strong>
+                <small id="sleep-state" data-i18n="sleep.unknown">Not read from the mouse yet</small>
+              </span>
+            </label>
+          </section>
+          <p class="hint" data-i18n="sleep.hint">The setting is stored in the
+          mouse: it survives disconnecting and a reboot, and this page only
+          reads it back. Switched off, the mouse never goes to sleep on its
+          own, which noticeably shortens battery life. Independently of this,
+          sleep stays suspended for as long as the dashboard is connected &ndash;
+          otherwise the mouse would drop the connection mid-session. That
+          suspension is not stored and lapses by itself once this page lets
+          go.</p>
+        </div>
+      </details>
         </section>
       </div>
     </div>
@@ -343,7 +383,7 @@
        ist zugleich die Nummer, die unten die Module aus dem
        Zwischenspeicher holt: zwei Zaehler waeren zwei Gelegenheiten,
        auseinanderzulaufen. -->
-          <small class="app-version">v106</small>
+          <small class="app-version">v107</small>
 
   <div id="toast" class="toast" role="status"></div>
   <!-- three.js liegt im Projekt statt auf einem fremden Netz: Das Dashboard
@@ -361,17 +401,17 @@
       "imports": {
         "three": "./js/vendor/three.module.min.js",
         "three/addons/": "./js/vendor/addons/",
-        "./js/app.js": "./js/app.js?v=106",
-        "./js/bluetooth.js": "./js/bluetooth.js?v=106",
-        "./js/charts.js": "./js/charts.js?v=106",
-        "./js/i18n.js": "./js/i18n.js?v=106",
-        "./js/model3d.js": "./js/model3d.js?v=106",
-        "./js/protocol.js": "./js/protocol.js?v=106",
-        "./js/webhid.js": "./js/webhid.js?v=106"
+        "./js/app.js": "./js/app.js?v=107",
+        "./js/bluetooth.js": "./js/bluetooth.js?v=107",
+        "./js/charts.js": "./js/charts.js?v=107",
+        "./js/i18n.js": "./js/i18n.js?v=107",
+        "./js/model3d.js": "./js/model3d.js?v=107",
+        "./js/protocol.js": "./js/protocol.js?v=107",
+        "./js/webhid.js": "./js/webhid.js?v=107"
       }
     }
   </script>
-  <script type="module" src="./js/intro.js?v=106"></script>
-  <script type="module" src="./js/app.js?v=106"></script>
+  <script type="module" src="./js/intro.js?v=107"></script>
+  <script type="module" src="./js/app.js?v=107"></script>
 </body>
 </html>

@@ -54,6 +54,15 @@ export class XensivMouseBluetooth extends EventTarget {
     return Boolean(navigator.bluetooth);
   }
 
+  // Den Ruhezustand steuert der Feature-Report 0x10, und der gehoert zum
+  // HID-Dienst 0x1812. Den gibt der Browser ueber `navigator.bluetooth` nicht
+  // heraus - er steht auf der Sperrliste, damit keine Seite Tastatureingaben
+  // mitlesen kann. Ueber diesen Weg ist die Einstellung also nicht zu haben,
+  // und zwar grundsaetzlich, nicht nur gerade.
+  get sleepControl() {
+    return false;
+  }
+
   // ─── Verbindungsaufbau ──────────────────────────────
 
   async connect() {

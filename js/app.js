@@ -122,6 +122,11 @@ function liveTabActive() {
 
 connectButton.addEventListener("click", async () => {
   if (mouse.connected) {
+    // Erst die Freistellung zurueckgeben, dann trennen. Danach ginge es
+    // nicht mehr: Der Weg zur Maus fuehrt ueber genau die Verbindung, die
+    // hier gekappt wird. Zwingend ist es nicht - die Firmware gibt sie beim
+    // Trennen ohnehin frei -, aber sauberer, als sie auslaufen zu lassen.
+    await releaseKeepAwake();
     mouse.disconnect();
     return;
   }
@@ -155,6 +160,11 @@ resetButton.addEventListener("click", async () => {
 
 mouse.addEventListener("connected", async ({ detail: device }) => {
   setDeviceControls(true);
+
+  // Zuerst die Freistellung, dann alles andere: Sie haelt die Verbindung,
+  // ueber die das Uebrige erst laeuft. Eine Maus, die waehrend des Auslesens
+  // einschlaeft, nimmt die Sitzung mit.
+  startKeepAwake();
   // Der Name kommt vom Geraet und bleibt, wie er ist - er ist das einzige
   // Stueck dieser Anzeige, das keiner Uebersetzung bedarf. Nennt das Geraet
   // keinen, tritt ein eigener Ersatzname ein, und der gehoert uebersetzt wie
@@ -190,18 +200,32 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
   }
 
   notify(t("msg.connected"));
+
+  // Die Einstellung kommt aus dem Geraet, nicht aus dem Gedaechtnis dieser
+  // Seite: Sie liegt im Flash und kann zwischendurch anderswo geaendert
+  // worden sein - vom Desktop-Werkzeug, von einem anderen Reiter.
+  updateSleepAvailability();
+  await loadSleepPreference();
+
   previewLed(byId("led-color").value);
   if (liveTabActive()) startMonitoring();
 });
 
 mouse.addEventListener("disconnected", ({ detail }) => {
   stopMonitoring();
+  stopKeepAwake();
   window.clearInterval(batteryTimer);
   batteryTimer = null;
   setDeviceControls(false);
   setConnectionState("offline", "state.offline");
   setConnectButton("header.connect");
   batteryLabel.textContent = "--";
+
+  // Was in der Maus steht, weiss die Seite ab hier nicht mehr. Den zuletzt
+  // gelesenen Stand stehen zu lassen hiesse, eine Auskunft zu geben, fuer
+  // die es keine Quelle mehr gibt.
+  showSleepPreference(null);
+  updateSleepAvailability();
 
   // Die Seite steht ab hier bereit fuer eine neue Verbindung, nicht fuer
   // die Fortsetzung der alten. Der Knopf zum Neuaufbau gehoert deshalb
@@ -231,6 +255,13 @@ mouse.addEventListener("notice", ({ detail }) => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     mouse.resume();
+
+    // Im Hintergrund bremst der Browser Zeitgeber auf hoechstens einen Aufruf
+    // je Minute aus. Die Freistellung laeuft nach genau einer Minute ab -
+    // sie kann also waehrend der Zeit im Hintergrund verfallen sein. Beim
+    // Zurueckkommen deshalb sofort erneuern, statt bis zum naechsten
+    // regulaeren Durchlauf zu warten.
+    renewKeepAwake();
     if (liveTabActive()) startMonitoring();
     return;
   }
@@ -243,8 +274,19 @@ document.addEventListener("visibilitychange", () => {
 
 // Ohne ausdrückliche Freigabe bleibt der Kanal nach einem Neuladen
 // belegt und die Maus verweigert jeden neuen Zugriff.
-window.addEventListener("pagehide", () => mouse.release());
-window.addEventListener("beforeunload", () => mouse.release());
+//
+// Die Freistellung geht dabei mit hinaus, aber ohne Gewähr: Beim Verlassen
+// der Seite bleibt keine Zeit, auf die Antwort zu warten. Schlimm ist das
+// nicht – die Firmware gibt sie beim Trennen von selbst frei, und nach einer
+// Minute ohne Erneuerung läuft sie ohnehin aus.
+window.addEventListener("pagehide", () => {
+  releaseKeepAwake();
+  mouse.release();
+});
+window.addEventListener("beforeunload", () => {
+  releaseKeepAwake();
+  mouse.release();
+});
 
 // Der Browser legt Seiten beiseite und holt sie wieder hervor, ohne sie neu
 // zu laden. Dann ist der Kanal freigegeben, aber niemand hat ihn wieder
@@ -252,6 +294,145 @@ window.addEventListener("beforeunload", () => mouse.release());
 window.addEventListener("pageshow", ({ persisted }) => {
   if (persisted) mouse.resume();
 });
+
+// ─── Ruhezustand ──────────────────────────────────────
+//
+// Zwei Dinge, die dasselbe bewirken können und trotzdem nicht dasselbe sind.
+//
+// Die Einstellung ist der Wille des Nutzers: Soll diese Maus überhaupt
+// schlafen? Sie liegt im Flash, überdauert Trennung und Neustart, und diese
+// Seite fasst sie nur an, wenn er den Schalter umlegt.
+//
+// Die Freistellung ist eine Bitte auf Zeit: nicht, solange ich verbunden bin.
+// Sie liegt nirgends, fällt beim Trennen weg und läuft nach einer Minute aus,
+// wenn sie niemand erneuert. Deshalb der Zeitgeber – und deshalb nur er.
+//
+// Die Maus schläft, wenn die Einstellung es erlaubt UND keine Freistellung
+// besteht. Die Sitzung mit der Einstellung wachzuhalten wäre der bequeme Weg
+// und der falsche: Er überschriebe lautlos, was der Nutzer eingestellt hat,
+// und der fände seine Maus Wochen später leer vor, ohne je etwas verstellt zu
+// haben.
+
+// Die Freistellung hält eine Minute. Die Hälfte davon lässt Raum für einen
+// Durchlauf, der ausfällt oder sich verspätet, ohne dass gleich eine Lücke
+// entsteht.
+const KEEP_AWAKE_INTERVAL = 30000;
+let keepAwakeTimer = null;
+
+function startKeepAwake() {
+  if (!mouse.sleepControl) return;
+
+  stopKeepAwake();
+  renewKeepAwake();
+  keepAwakeTimer = window.setInterval(renewKeepAwake, KEEP_AWAKE_INTERVAL);
+}
+
+function stopKeepAwake() {
+  window.clearInterval(keepAwakeTimer);
+  keepAwakeTimer = null;
+}
+
+// Scheitert eine Erneuerung, ist die Verbindung fort - und das hat der
+// Transport bereits gemeldet und die Seite aufgeräumt. Eine zweite Meldung
+// aus dem Zeitgeber heraus stünde nur daneben und erklärte nichts.
+function renewKeepAwake() {
+  if (!mouse.sleepControl || !mouse.connected) return Promise.resolve();
+  return mouse.setKeepAwake(true).catch(() => {});
+}
+
+function releaseKeepAwake() {
+  stopKeepAwake();
+  if (!mouse.sleepControl || !mouse.connected) return Promise.resolve();
+  return mouse.setKeepAwake(false).catch(() => {});
+}
+
+const sleepField = byId("sleep-field");
+const sleepBox = byId("sleep-enabled");
+
+sleepBox.addEventListener("change", () => applySleepPreference());
+
+// Abschalten wirkt über diese Sitzung hinaus und kostet Laufzeit. Das ist
+// nichts, was nebenbei passieren sollte - also wird gefragt. Einschalten
+// dagegen stellt nur den Auslieferungszustand wieder her und braucht keine
+// Rückfrage.
+async function applySleepPreference() {
+  const enabled = sleepBox.checked;
+
+  if (!enabled && !window.confirm(t("sleep.confirm"))) {
+    sleepBox.checked = true;
+    return;
+  }
+
+  // Der Schalter sagt, was gewollt ist; das Gerät sagt, was gilt. Nach dem
+  // Schreiben wird deshalb nachgefragt - sonst stünde hier eine Einstellung,
+  // die die Maus nie übernommen hat, und niemand wüsste es.
+  try {
+    await mouse.setSleepEnabled(enabled);
+    if (await mouse.readSleepEnabled() !== enabled) {
+      throw new Error(t("error.sleepRejected"));
+    }
+    showSleepPreference(enabled);
+    notify(t(enabled ? "msg.sleepOn" : "msg.sleepOff"));
+  } catch (error) {
+    await loadSleepPreference();
+    showError(new Error(t("msg.sleepFailed", { error: error.message })));
+  }
+}
+
+async function loadSleepPreference() {
+  if (!mouse.sleepControl || !mouse.connected) return;
+
+  try {
+    showSleepPreference(await mouse.readSleepEnabled());
+  } catch (error) {
+    // Der Schalter behält seine Stellung, die Zeile darunter nimmt sie
+    // zurück: Angezeigt wird ab jetzt "unbekannt", nicht eine Vermutung.
+    showSleepPreference(null);
+    showError(new Error(t("msg.sleepUnreadable", { error: error.message })));
+  }
+}
+
+// `null` heisst: nicht bekannt. Dann bleibt der Schieber, wo er steht - eine
+// Stellung muss er ja haben -, aber die Zeile darunter sagt, dass sie nichts
+// bedeutet.
+function showSleepPreference(enabled) {
+  if (enabled !== null) sleepBox.checked = enabled;
+
+  const key = enabled === null ? "sleep.unknown"
+    : enabled ? "sleep.on" : "sleep.off";
+
+  // Der Schlüssel wird hinterlegt, nicht der fertige Text: So schreibt ihn
+  // der Sprachwechsel von selbst um, ohne dass diese Stelle davon weiss.
+  const state = byId("sleep-state");
+  state.dataset.i18n = key;
+  state.textContent = t(key);
+}
+
+// Zwei Bedingungen, zwei verschiedene Auskünfte: Über GATT gibt es die
+// Einstellung grundsätzlich nicht, ohne Verbindung nur gerade jetzt nicht.
+// Beides sieht gleich aus - ein blasser Schalter -, und ohne den Hinweis
+// dahinter bliebe offen, ob Warten hilft oder nur ein anderer Browser.
+function updateSleepAvailability() {
+  const supported = Boolean(mouse.sleepControl);
+  const usable = supported && mouse.connected;
+
+  sleepBox.disabled = !usable;
+  sleepField.dataset.state =
+    !supported ? "unsupported" : usable ? "ready" : "offline";
+
+  // Ist der Schalter bedienbar, steht die Erklärung schon als Absatz
+  // darunter. Sie zusätzlich beim Verweilen einzublenden wäre dieselbe
+  // Auskunft zweimal.
+  if (usable) {
+    delete sleepField.dataset.i18nTitle;
+    sleepField.removeAttribute("title");
+    return;
+  }
+
+  sleepField.dataset.i18nTitle =
+    supported ? "sleep.needsConnection" : "sleep.unavailable";
+  sleepField.title = t(sleepField.dataset.i18nTitle);
+}
 
 // ─── Live-Überwachung ─────────────────────────────────
 // Läuft, solange der Reiter offen und die Maus verbunden ist.
@@ -1154,6 +1335,7 @@ translate();
 
 buildPressBars();
 setDeviceControls(false);
+updateSleepAvailability();
 showActiveSensors();
 labelSensorBoxes();
 previewLed(byId("led-color").value);
