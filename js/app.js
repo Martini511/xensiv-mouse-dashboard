@@ -496,8 +496,8 @@ triggerBlocks.forEach((block) => {
 
   block.querySelectorAll(".mode-switch button").forEach((button) => {
     button.addEventListener("click", () => {
-      const mode = button.dataset.mode === "rapid"
-        ? TRIGGER_MODE.rapid
+      const mode = button.dataset.mode === "relative"
+        ? TRIGGER_MODE.relative
         : TRIGGER_MODE.fixed;
 
       // Schon die gewählte Betriebsart: Dann gibt es nichts zu schreiben.
@@ -508,17 +508,31 @@ triggerBlocks.forEach((block) => {
     });
   });
 
+  // Der eine Regler der Zeile setzt beide Werte auf dasselbe - das ist der
+  // Sinn der Zusammenfassung. Wer sie auseinanderziehen will, tut das unten.
+  const simple = byId(`${key}-relative`);
+  simple.addEventListener("input", () => mirrorSimpleToFields(key));
+  simple.addEventListener("change", () => {
+    const value = Number(simple.value);
+    writeTriggerConfig(key, { pressDelta: value, releaseDelta: value });
+  });
+
   // `change`, nicht `input`: Geschrieben wird erst, wenn der Regler
   // losgelassen ist. Während des Ziehens liefert er Dutzende Zwischenwerte,
   // und jeder davon ginge in den Flash.
   ["press-delta", "release-delta", "deadzone"].forEach((field) => {
-    byId(`${key}-${field}`).addEventListener("change",
-      () => writeTriggerConfig(key, {}));
+    const input = byId(`${key}-${field}`);
+    input.addEventListener("input", () => showSimpleFromFields(key));
+    input.addEventListener("change", () => writeTriggerConfig(key, {}));
   });
 });
 
 function triggerBlock(key) {
   return triggerBlocks.find((block) => block.dataset.sensor === key);
+}
+
+function advancedGroup(key) {
+  return document.querySelector(`[data-advanced="${key}"]`);
 }
 
 async function writeTriggerConfig(key, changes) {
@@ -545,7 +559,7 @@ async function writeTriggerConfig(key, changes) {
 // zuletzt gemeldet hat. Ohne Meldung gilt die Werkseinstellung.
 function readTriggerFields(key) {
   return {
-    mode: triggerConfigs.get(key)?.mode ?? TRIGGER_MODE.rapid,
+    mode: triggerConfigs.get(key)?.mode ?? TRIGGER_MODE.relative,
     pressDelta: numberValue(`${key}-press-delta`),
     releaseDelta: numberValue(`${key}-release-delta`),
     deadzone: numberValue(`${key}-deadzone`),
@@ -605,9 +619,9 @@ async function readTriggerStateInto(key) {
   }
 }
 
-// Laufend gelesen wird nur, was sich auch bewegt: die schnelle Betriebsart.
-// In der festen stehen die Linien an der Schwelle, und die kennt die Seite
-// ohnehin - dort wäre jede Abfrage verschenkt.
+// Laufend gelesen wird nur, was sich auch bewegt: die relative Schwelle. Die
+// feste steht, und wo sie steht, weiss die Seite ohnehin - dort waere jede
+// Abfrage verschenkt.
 //
 // Die Sensoren, die je Taste tatsächlich messen, stehen zweimal in der Runde
 // und kommen damit doppelt so oft an die Reihe: An ihnen wird eingestellt.
@@ -620,7 +634,7 @@ function liveTriggerKeys() {
   const active = [activeSensor("left"), activeSensor("right")];
 
   return SHOWN_SENSORS
-    .filter(rapidMode)
+    .filter(relativeMode)
     .flatMap((key) => (active.includes(key) ? [key, key] : [key]));
 }
 
@@ -641,7 +655,39 @@ function showTriggerConfig(key, config) {
   setRange(`${key}-press-delta`, config.pressDelta);
   setRange(`${key}-release-delta`, config.releaseDelta);
   setRange(`${key}-deadzone`, config.deadzone);
+  showSimpleFromFields(key);
   showTriggerMode(key, config.mode);
+}
+
+// Der Regler der Zeile zeigt das Ansprechen. Gehen Ansprechen und Loslassen
+// auseinander, sagt die Marke daneben es - sonst stuende dort eine Zahl, die
+// nur die halbe Einstellung meint, und niemand saehe den Unterschied.
+function showSimpleFromFields(key) {
+  const press = numberValue(`${key}-press-delta`);
+  const release = numberValue(`${key}-release-delta`);
+
+  setRange(`${key}-relative`, press);
+
+  const mark = byId(`${key}-split`);
+  mark.hidden = press === release;
+  mark.textContent = `\u2260 ${release}`;
+
+  // Kein `data-i18n-title`: Der Sprachwechsel setzt solche Hinweise stumpf
+  // neu und kennt die beiden Zahlen nicht - dort staenden dann die
+  // Platzhalter selbst. Neu geschrieben wird er stattdessen in
+  // `refreshTexts`, wo die Werte noch zur Hand sind.
+  mark.title = t("trigger.split", { press, release });
+}
+
+// Der Weg andersherum, waehrend am einfachen Regler gezogen wird: Beide
+// Werte folgen ihm, damit die erweiterten Regler nicht das Gestrige zeigen,
+// wenn man sie gleich darauf aufklappt.
+function mirrorSimpleToFields(key) {
+  const value = numberValue(`${key}-relative`);
+
+  setRange(`${key}-press-delta`, value);
+  setRange(`${key}-release-delta`, value);
+  byId(`${key}-split`).hidden = true;
 }
 
 // Die Anzeige neben dem Regler hängt am `input`-Ereignis, und das bleibt aus,
@@ -655,20 +701,26 @@ function setRange(id, value) {
 
 function showTriggerMode(key, mode) {
   const block = triggerBlock(key);
-  const rapid = mode === TRIGGER_MODE.rapid;
+  const relative = mode === TRIGGER_MODE.relative;
 
   block.querySelectorAll(".mode-switch button").forEach((button) => {
-    const chosen = (button.dataset.mode === "rapid") === rapid;
+    const chosen = (button.dataset.mode === "relative") === relative;
     button.classList.toggle("is-active", chosen);
     button.setAttribute("aria-pressed", String(chosen));
   });
 
-  // Die Schwelle wirkt in der schnellen Betriebsart nicht. Einen Regler
-  // stehen zu lassen, der nichts tut, wäre schlimmer als ihn wegzunehmen: Er
-  // lädt dazu ein, an ihm zu drehen und sich zu wundern.
+  // Sichtbar ist die Schwelle, die gerade wirkt. Die andere stehen zu lassen
+  // waere schlimmer als sie wegzunehmen: Sie laedt dazu ein, an ihr zu drehen
+  // und sich zu wundern.
   block.querySelectorAll("[data-trigger-view]").forEach((view) => {
-    view.hidden = (view.dataset.triggerView === "rapid") !== rapid;
+    view.hidden = (view.dataset.triggerView === "relative") !== relative;
   });
+
+  // Unten bleiben die Regler stehen - die Werte liegen im Geraet und gelten,
+  // sobald zurueckgeschaltet wird. Nur der Hinweis sagt, dass sie gerade
+  // nichts bewirken.
+  advancedGroup(key).classList.toggle("is-inactive", !relative);
+  advancedGroup(key).querySelector(".advanced-note").hidden = relative;
 }
 
 // Zwei Bedingungen, zwei verschiedene Auskünfte: Über GATT gibt es das
@@ -679,8 +731,16 @@ function updateTriggerAvailability() {
   const usable = supported && mouse.connected;
 
   triggerBlocks.forEach((block) => {
-    block.querySelectorAll(".mode-switch button, .trigger-params input")
-      .forEach((element) => { element.disabled = !usable; });
+    const key = block.dataset.sensor;
+
+    // Ausdruecklich nur die Bedienelemente des Ausloeseverhaltens. Der
+    // Schieber fuer die feste Schwelle gehoert nicht dazu: Der laeuft ueber
+    // GATT und haengt an `setDeviceControls` - hier mitgefasst, waere er im
+    // GATT-Betrieb gesperrt, obwohl er dort gerade funktioniert.
+    [
+      ...block.querySelectorAll(".mode-switch button, .threshold-relative input"),
+      ...advancedGroup(key).querySelectorAll("input"),
+    ].forEach((element) => { element.disabled = !usable; });
 
     const modeSwitch = block.querySelector(".mode-switch");
 
@@ -1055,14 +1115,14 @@ function showPressure(values) {
 
 // Wo die Taste gerade auslöst und wo sie wieder loslässt.
 //
-// In der schnellen Betriebsart wandern beide Linien mit dem Finger, und wo
-// sie stehen, weiß allein die Firmware - also kommt es von dort. In der
-// festen Betriebsart stehen sie an der Schwelle, und die steht auf der Seite:
-// Sie von dort zu nehmen ist nicht nur billiger, sondern auch richtiger. Ein
-// beim Verbinden gelesener Zustand würde sonst weiter angezeigt, nachdem die
+// Bei der relativen Schwelle wandern beide Linien mit dem Finger, und wo
+// sie stehen, weiß allein die Firmware - also kommt es von dort. Bei der
+// festen stehen sie an der Schwelle, und die steht auf der Seite: Sie von
+// dort zu nehmen ist nicht nur billiger, sondern auch richtiger. Ein beim
+// Verbinden gelesener Zustand würde sonst weiter angezeigt, nachdem die
 // Schwelle längst neu geschrieben wurde.
 function pressPointOf(key) {
-  if (rapidMode(key)) {
+  if (relativeMode(key)) {
     const state = triggerStates.get(key);
     if (state) return state.pressPoint;
   }
@@ -1071,7 +1131,7 @@ function pressPointOf(key) {
 }
 
 function releasePointOf(key) {
-  if (rapidMode(key)) {
+  if (relativeMode(key)) {
     const state = triggerStates.get(key);
     if (state) return state.releasePoint;
   }
@@ -1079,8 +1139,8 @@ function releasePointOf(key) {
   return Math.round(thresholdOf(key) * FIXED_RELEASE_RATIO);
 }
 
-function rapidMode(key) {
-  return triggerConfigs.get(key)?.mode === TRIGGER_MODE.rapid;
+function relativeMode(key) {
+  return triggerConfigs.get(key)?.mode === TRIGGER_MODE.relative;
 }
 
 // Wie weit ist der Druck in seinem Abschnitt fortgeschritten? Unterhalb der
@@ -1095,12 +1155,12 @@ function pressShare(pressure, threshold, tripped) {
 }
 
 function isPressed(values, key) {
-  // In der schnellen Betriebsart laesst sich der Tastendruck hier nicht
+  // Bei der relativen Schwelle laesst sich der Tastendruck hier nicht
   // ausrechnen: Er haengt am Verlauf der letzten Messwerte, und den kennt nur
-  // die Firmware. Dort gilt deshalb ihr Urteil. In der festen Betriebsart
+  // die Firmware. Dort gilt deshalb ihr Urteil. Bei der festen Schwelle
   // bleibt der oertliche Vergleich - er ist richtig und kommt ohne die
   // Verzoegerung einer weiteren Abfrage.
-  if (triggerConfigs.get(key)?.mode === TRIGGER_MODE.rapid) {
+  if (relativeMode(key)) {
     const state = triggerStates.get(key);
     if (state) return state.pressed;
   }
@@ -1622,6 +1682,7 @@ function refreshTexts() {
   buildPressBars();
   showActiveSensors();
   labelSensorBoxes();
+  SHOWN_SENSORS.forEach(showSimpleFromFields);
   if (lastRead) {
     showRawAnswer(lastRead);
     SHOWN_SENSORS.forEach((key) => {

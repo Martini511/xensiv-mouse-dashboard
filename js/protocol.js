@@ -114,16 +114,17 @@ export function encodeCalibrationCommand(command) {
 
 // Zwei Arten, aus einem Messwert einen Tastendruck zu machen.
 //
-// Fest: oberhalb der Schwelle gedrückt, unterhalb von 85 Prozent der Schwelle
-// wieder los. Zwei Linien, die stehen bleiben.
+// Feste Schwelle: oberhalb gedrückt, unterhalb von 85 Prozent davon wieder
+// los. Zwei Linien, die stehen bleiben.
 //
-// Schnell: die Firmware merkt sich den tiefsten Punkt und lässt los, sobald
-// man um `releaseDelta` zurückgeht - und löst wieder aus, sobald man um
-// `pressDelta` nachdrückt. Die beiden Linien wandern damit mit dem Finger.
-// Erneut klicken heißt dann nicht mehr, erst über einen festen Punkt
+// Relative Schwelle: die Firmware merkt sich den tiefsten Punkt und lässt
+// los, sobald man um `releaseDelta` zurückgeht - und löst wieder aus, sobald
+// man um `pressDelta` nachdrückt. Die beiden Linien wandern damit mit dem
+// Finger; gemessen wird relativ zum Verlauf statt gegen einen festen Punkt.
+// Erneut klicken heißt dann nicht mehr, erst über diesen Punkt
 // zurückzukommen. Nahe der Ruhelage erzwingt die Totzone das Loslassen und
 // setzt die Verfolgung zurück.
-export const TRIGGER_MODE = Object.freeze({ fixed: 0, rapid: 1 });
+export const TRIGGER_MODE = Object.freeze({ fixed: 0, relative: 1 });
 
 // Der Rückfall in der festen Betriebsart steckt in der Firmware, nicht in
 // einer Einstellung. Hier steht er, damit die Anzeige die Rückfalllinie auch

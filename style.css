@@ -647,27 +647,72 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .mode-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .mode-switch:not([data-state="ready"]) { cursor: help; }
 
-/* Die drei Regler der schnellen Betriebsart stehen unter der Zeile, nicht
-   darin: In einer Reihe mit Name, Betriebsart und Freigabe bliebe fuer jeden
+/* Die Marke steht neben der Zahl, nicht an ihrer Stelle: Der Regler zeigt
+   weiter das Ansprechen, und die Marke sagt, dass das Loslassen woanders
+   liegt. Sie traegt den zweiten Wert gleich mit - eine blosse Warnung
+   zwaenge dazu, unten nachzusehen, was sie meint. */
+.split-mark {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: #fdf0e2;
+  color: var(--signal);
+  cursor: help;
+  font: 500 10px "IBM Plex Mono", monospace;
+  white-space: nowrap;
+}
+.split-mark[hidden] { display: none; }
+
+/* Die drei Regler stehen unter den erweiterten Einstellungen, nicht in der
+   Zeile: In einer Reihe mit Name, Schwellenart und Freigabe bliebe fuer jeden
    von ihnen ein Streifen von wenigen Millimetern. */
 .trigger-params {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px 26px;
-  padding: 2px 20px 18px;
-  background: #fbfcfc;
 }
 .trigger-params label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 3px 10px; font-size: 12px; }
 .trigger-params label span { color: var(--muted); }
 .trigger-params label input { grid-column: 1 / -1; }
 .trigger-params output { font: 500 11px "IBM Plex Mono", monospace; }
 
+/* Zugeklappt und am Ende: Wer nur eine Empfindlichkeit sucht, findet sie
+   oben in der Zeile und muss hier gar nicht hinsehen. */
+.trigger-advanced { margin-top: 18px; border: 1px solid var(--line); }
+.trigger-advanced > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #fbfcfc;
+  color: var(--muted);
+  cursor: pointer;
+  font: 500 11px "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+}
+.trigger-advanced > summary:hover { color: var(--ink); }
+.trigger-advanced > summary small { font-size: 10px; text-transform: none; letter-spacing: .02em; }
+.trigger-advanced[open] > summary { border-bottom: 1px solid var(--line); }
+.trigger-advanced > .hint { margin: 0; padding: 0 20px 18px; }
+
+.advanced-list { padding: 4px 20px 18px; }
+.advanced-sensor + .advanced-sensor { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
+.advanced-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.advanced-head > span { font-weight: 700; font-size: 13px; }
+
+/* Gesperrt wird hier nichts: Die Werte liegen im Geraet und gelten wieder,
+   sobald die relative Schwelle zurueckkommt. Nur die Farbe nimmt sich
+   zurueck, und der Hinweis sagt, warum. */
+.advanced-note { color: var(--signal); font: 500 10px "IBM Plex Mono", monospace; }
+.advanced-note[hidden] { display: none; }
+.advanced-sensor.is-inactive .trigger-params { opacity: .55; }
+
 /* `hidden` allein genuegt hier nicht. Das Merkmal wirkt ueber die Regel
    `display: none` des Browsers, und die steht in dessen eigenem Stilblatt -
    jede Klassenregel von hier schlaegt sie, auch eine so schlichte wie
    `display: flex`. Ohne diese Zeile blieben beide Ansichten zugleich
-   sichtbar, und der Schieber fuer die Schwelle staende neben den Reglern,
-   die ihn ersetzen sollen. */
+   sichtbar, und der Schieber fuer die feste Schwelle staende neben dem fuer
+   die relative, die ihn ersetzen soll. */
 [data-trigger-view][hidden] { display: none; }
 
 /* ─── Radkalibrierung ────────────────────────────── */
@@ -765,7 +810,8 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
   /* Auf dieser Breite reihen sich Betriebsart und Schwelle unter den Namen,
      statt neben ihm um denselben Platz zu streiten. */
   .sensor-row .mode-switch { grid-column: 1 / -1; }
-  .trigger-params { grid-template-columns: 1fr; padding-inline: 20px; }
+  .trigger-params { grid-template-columns: 1fr; }
+  .advanced-list, .trigger-advanced > summary, .trigger-advanced > .hint { padding-inline: 16px; }
   .sensor-header { display: none; }
   .toolbar { align-items: flex-start; flex-direction: column; }
   .calibration-actions { flex-wrap: wrap; }

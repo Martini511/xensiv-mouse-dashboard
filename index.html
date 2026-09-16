@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=108">
+  <link rel="stylesheet" href="./style.css?v=109">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -265,89 +265,145 @@
               <span data-i18n="buttons.colSensor">Sensor</span><span data-i18n="buttons.colMode">Trigger</span><span data-i18n="buttons.colThreshold">Threshold</span><span data-i18n="buttons.colActive">Active</span>
             </div>
 
-            <!-- Je Sensor ein Block: die Zeile mit Betriebsart und Schwelle,
-                 darunter die drei Regler der schnellen Betriebsart. Sichtbar
-                 ist immer nur eines von beiden - die Schwelle wirkt in der
-                 schnellen Betriebsart nicht, und ein Regler, der nichts tut,
-                 ist schlimmer als keiner. -->
+            <!-- Je Sensor eine Zeile mit Betriebsart und einer Schwelle.
+                 Welche Schwelle, entscheidet die Betriebsart: die feste oder
+                 die relative. Sichtbar ist immer nur eine - die andere wirkt
+                 gerade nicht, und ein Regler, der nichts tut, ist schlimmer
+                 als keiner.
+
+                 Die relative Schwelle setzt Ansprechen und Loslassen auf
+                 denselben Wert. Wer sie auseinanderziehen will, findet beide
+                 unter den erweiterten Einstellungen; die Zeile zeigt dann
+                 eine Marke und den Wert fuers Ansprechen. -->
             <div class="sensor-block" data-sensor="leftForce">
               <div class="sensor-row">
                 <label data-i18n="sensor.leftForce">Left Force</label>
-                <div class="mode-switch" role="group" data-i18n-aria="trigger.aria" aria-label="Trigger mode">
+                <div class="mode-switch" role="group" data-i18n-aria="trigger.aria" aria-label="Threshold mode">
                   <button type="button" data-mode="fixed" data-i18n="trigger.fixed">Fixed</button>
-                  <button type="button" data-mode="rapid" data-i18n="trigger.rapid">Rapid</button>
+                  <button type="button" data-mode="relative" data-i18n="trigger.relative">Relative</button>
                 </div>
                 <div class="threshold" data-trigger-view="fixed"><input id="leftForce-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="leftForce-threshold-value">64</output></div>
+                <div class="threshold threshold-relative" data-trigger-view="relative" hidden><input id="leftForce-relative" type="range" min="1" max="64" value="10" data-i18n-aria="trigger.relativeFull" aria-label="Relative threshold" oninput="this.nextElementSibling.value=this.value"><output>10</output><b class="split-mark" id="leftForce-split" hidden></b></div>
                 <input id="leftForce-enabled" type="checkbox" checked data-device-control aria-label="Left Force active">
-              </div>
-              <div class="trigger-params" data-trigger-view="rapid" hidden>
-                <label><span data-i18n="trigger.press">Press sensitivity</span><input id="leftForce-press-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
-                <label><span data-i18n="trigger.release">Release sensitivity</span><input id="leftForce-release-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
-                <label><span data-i18n="trigger.deadzone">Deadzone</span><input id="leftForce-deadzone" type="range" min="0" max="32" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></label>
               </div>
             </div>
 
             <div class="sensor-block" data-sensor="leftHall">
               <div class="sensor-row">
                 <label data-i18n="sensor.leftHall">Left Hall</label>
-                <div class="mode-switch" role="group" data-i18n-aria="trigger.aria" aria-label="Trigger mode">
+                <div class="mode-switch" role="group" data-i18n-aria="trigger.aria" aria-label="Threshold mode">
                   <button type="button" data-mode="fixed" data-i18n="trigger.fixed">Fixed</button>
-                  <button type="button" data-mode="rapid" data-i18n="trigger.rapid">Rapid</button>
+                  <button type="button" data-mode="relative" data-i18n="trigger.relative">Relative</button>
                 </div>
                 <div class="threshold" data-trigger-view="fixed"><input id="leftHall-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="leftHall-threshold-value">64</output></div>
+                <div class="threshold threshold-relative" data-trigger-view="relative" hidden><input id="leftHall-relative" type="range" min="1" max="64" value="10" data-i18n-aria="trigger.relativeFull" aria-label="Relative threshold" oninput="this.nextElementSibling.value=this.value"><output>10</output><b class="split-mark" id="leftHall-split" hidden></b></div>
                 <input id="leftHall-enabled" type="checkbox" data-device-control aria-label="Left Hall active">
-              </div>
-              <div class="trigger-params" data-trigger-view="rapid" hidden>
-                <label><span data-i18n="trigger.press">Press sensitivity</span><input id="leftHall-press-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
-                <label><span data-i18n="trigger.release">Release sensitivity</span><input id="leftHall-release-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
-                <label><span data-i18n="trigger.deadzone">Deadzone</span><input id="leftHall-deadzone" type="range" min="0" max="32" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></label>
               </div>
             </div>
 
             <div class="sensor-block" data-sensor="rightForce">
               <div class="sensor-row">
                 <label data-i18n="sensor.rightForce">Right Force</label>
-                <div class="mode-switch" role="group" data-i18n-aria="trigger.aria" aria-label="Trigger mode">
+                <div class="mode-switch" role="group" data-i18n-aria="trigger.aria" aria-label="Threshold mode">
                   <button type="button" data-mode="fixed" data-i18n="trigger.fixed">Fixed</button>
-                  <button type="button" data-mode="rapid" data-i18n="trigger.rapid">Rapid</button>
+                  <button type="button" data-mode="relative" data-i18n="trigger.relative">Relative</button>
                 </div>
                 <div class="threshold" data-trigger-view="fixed"><input id="rightForce-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="rightForce-threshold-value">64</output></div>
+                <div class="threshold threshold-relative" data-trigger-view="relative" hidden><input id="rightForce-relative" type="range" min="1" max="64" value="10" data-i18n-aria="trigger.relativeFull" aria-label="Relative threshold" oninput="this.nextElementSibling.value=this.value"><output>10</output><b class="split-mark" id="rightForce-split" hidden></b></div>
                 <input id="rightForce-enabled" type="checkbox" checked data-device-control aria-label="Right Force active">
-              </div>
-              <div class="trigger-params" data-trigger-view="rapid" hidden>
-                <label><span data-i18n="trigger.press">Press sensitivity</span><input id="rightForce-press-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
-                <label><span data-i18n="trigger.release">Release sensitivity</span><input id="rightForce-release-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
-                <label><span data-i18n="trigger.deadzone">Deadzone</span><input id="rightForce-deadzone" type="range" min="0" max="32" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></label>
               </div>
             </div>
 
             <div class="sensor-block" data-sensor="rightHall">
               <div class="sensor-row">
                 <label data-i18n="sensor.rightHall">Right Hall</label>
-                <div class="mode-switch" role="group" data-i18n-aria="trigger.aria" aria-label="Trigger mode">
+                <div class="mode-switch" role="group" data-i18n-aria="trigger.aria" aria-label="Threshold mode">
                   <button type="button" data-mode="fixed" data-i18n="trigger.fixed">Fixed</button>
-                  <button type="button" data-mode="rapid" data-i18n="trigger.rapid">Rapid</button>
+                  <button type="button" data-mode="relative" data-i18n="trigger.relative">Relative</button>
                 </div>
                 <div class="threshold" data-trigger-view="fixed"><input id="rightHall-threshold" type="range" min="0" max="127" value="64" data-device-control oninput="this.nextElementSibling.value=this.value"><output id="rightHall-threshold-value">64</output></div>
+                <div class="threshold threshold-relative" data-trigger-view="relative" hidden><input id="rightHall-relative" type="range" min="1" max="64" value="10" data-i18n-aria="trigger.relativeFull" aria-label="Relative threshold" oninput="this.nextElementSibling.value=this.value"><output>10</output><b class="split-mark" id="rightHall-split" hidden></b></div>
                 <input id="rightHall-enabled" type="checkbox" data-device-control aria-label="Right Hall active">
-              </div>
-              <div class="trigger-params" data-trigger-view="rapid" hidden>
-                <label><span data-i18n="trigger.press">Press sensitivity</span><input id="rightHall-press-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
-                <label><span data-i18n="trigger.release">Release sensitivity</span><input id="rightHall-release-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
-                <label><span data-i18n="trigger.deadzone">Deadzone</span><input id="rightHall-deadzone" type="range" min="0" max="32" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></label>
               </div>
             </div>
           </div>
-          <p class="hint" id="trigger-hint" data-i18n="trigger.hint">Fixed
-          actuates above the threshold and releases at 85&nbsp;% of it. Rapid
-          follows the signal instead: it releases as soon as you back off by
-          the release sensitivity and fires again once you push back in by the
-          press sensitivity, so a repeat click needs no return past a fixed
-          point. Lower values mean more sensitive. The deadzone near rest
-          forces a release and resets the tracking. Both modes keep their own
-          values in the mouse, so switching back and forth loses nothing. The
-          two marker lines on the live pressure bars show where the device is
-          actually switching.</p>
+
+          <!-- Alles Einzelne steht hier und zugeklappt: Ansprechen und
+               Loslassen getrennt, dazu die Totzone. Wer es braucht, findet
+               es; wer es nicht braucht, sieht oben einen Regler statt drei
+               mal vier. -->
+          <details class="trigger-advanced" id="trigger-advanced">
+            <summary>
+              <span data-i18n="trigger.advanced">Advanced settings</span>
+              <small data-i18n="trigger.advancedSub">Press and release separately, plus deadzone</small>
+            </summary>
+            <div class="advanced-list">
+              <div class="advanced-sensor" data-advanced="leftForce">
+                <div class="advanced-head">
+                  <span data-i18n="sensor.leftForce">Left Force</span>
+                  <b class="advanced-note" hidden data-i18n="trigger.inactive">Fixed threshold selected &ndash; stored, but not in effect</b>
+                </div>
+                <div class="trigger-params">
+                  <label><span data-i18n="trigger.press">Press sensitivity</span><input id="leftForce-press-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
+                  <label><span data-i18n="trigger.release">Release sensitivity</span><input id="leftForce-release-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
+                  <label><span data-i18n="trigger.deadzone">Deadzone</span><input id="leftForce-deadzone" type="range" min="0" max="32" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></label>
+                </div>
+              </div>
+
+              <div class="advanced-sensor" data-advanced="leftHall">
+                <div class="advanced-head">
+                  <span data-i18n="sensor.leftHall">Left Hall</span>
+                  <b class="advanced-note" hidden data-i18n="trigger.inactive">Fixed threshold selected &ndash; stored, but not in effect</b>
+                </div>
+                <div class="trigger-params">
+                  <label><span data-i18n="trigger.press">Press sensitivity</span><input id="leftHall-press-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
+                  <label><span data-i18n="trigger.release">Release sensitivity</span><input id="leftHall-release-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
+                  <label><span data-i18n="trigger.deadzone">Deadzone</span><input id="leftHall-deadzone" type="range" min="0" max="32" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></label>
+                </div>
+              </div>
+
+              <div class="advanced-sensor" data-advanced="rightForce">
+                <div class="advanced-head">
+                  <span data-i18n="sensor.rightForce">Right Force</span>
+                  <b class="advanced-note" hidden data-i18n="trigger.inactive">Fixed threshold selected &ndash; stored, but not in effect</b>
+                </div>
+                <div class="trigger-params">
+                  <label><span data-i18n="trigger.press">Press sensitivity</span><input id="rightForce-press-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
+                  <label><span data-i18n="trigger.release">Release sensitivity</span><input id="rightForce-release-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
+                  <label><span data-i18n="trigger.deadzone">Deadzone</span><input id="rightForce-deadzone" type="range" min="0" max="32" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></label>
+                </div>
+              </div>
+
+              <div class="advanced-sensor" data-advanced="rightHall">
+                <div class="advanced-head">
+                  <span data-i18n="sensor.rightHall">Right Hall</span>
+                  <b class="advanced-note" hidden data-i18n="trigger.inactive">Fixed threshold selected &ndash; stored, but not in effect</b>
+                </div>
+                <div class="trigger-params">
+                  <label><span data-i18n="trigger.press">Press sensitivity</span><input id="rightHall-press-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
+                  <label><span data-i18n="trigger.release">Release sensitivity</span><input id="rightHall-release-delta" type="range" min="1" max="64" value="10" oninput="this.nextElementSibling.value=this.value"><output>10</output></label>
+                  <label><span data-i18n="trigger.deadzone">Deadzone</span><input id="rightHall-deadzone" type="range" min="0" max="32" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></label>
+                </div>
+              </div>
+            </div>
+            <p class="hint" data-i18n="trigger.advancedHint">Press and release
+            sensitivity may differ &ndash; a lower release value lets the button
+            drop out sooner than it fires. The row above then shows the press
+            value and a mark that the two have been pulled apart; moving the
+            simple slider ties them back together. The deadzone near rest
+            forces a release and resets the tracking, which keeps noise around
+            the resting position from producing phantom clicks.</p>
+          </details>
+
+          <p class="hint" id="trigger-hint" data-i18n="trigger.hint">A fixed
+          threshold actuates above its value and releases at 85&nbsp;% of it.
+          A relative threshold follows the signal instead: it releases as soon
+          as you back off by that amount from the deepest point and fires
+          again once you push back in by it, so a repeat click needs no return
+          past a fixed point. Lower means more sensitive. Both modes keep
+          their own values in the mouse, so switching back and forth loses
+          nothing. The two marker lines on the live pressure bars show where
+          the device is actually switching.</p>
           <p class="hint" data-i18n="buttons.hint1">Only one sensor measures per
           button: enabling one releases the one so far on the same side. The
           thresholds take effect in the device itself &ndash; if a threshold lies
@@ -442,7 +498,7 @@
        ist zugleich die Nummer, die unten die Module aus dem
        Zwischenspeicher holt: zwei Zaehler waeren zwei Gelegenheiten,
        auseinanderzulaufen. -->
-          <small class="app-version">v108</small>
+          <small class="app-version">v109</small>
 
   <div id="toast" class="toast" role="status"></div>
   <!-- three.js liegt im Projekt statt auf einem fremden Netz: Das Dashboard
@@ -460,17 +516,17 @@
       "imports": {
         "three": "./js/vendor/three.module.min.js",
         "three/addons/": "./js/vendor/addons/",
-        "./js/app.js": "./js/app.js?v=108",
-        "./js/bluetooth.js": "./js/bluetooth.js?v=108",
-        "./js/charts.js": "./js/charts.js?v=108",
-        "./js/i18n.js": "./js/i18n.js?v=108",
-        "./js/model3d.js": "./js/model3d.js?v=108",
-        "./js/protocol.js": "./js/protocol.js?v=108",
-        "./js/webhid.js": "./js/webhid.js?v=108"
+        "./js/app.js": "./js/app.js?v=109",
+        "./js/bluetooth.js": "./js/bluetooth.js?v=109",
+        "./js/charts.js": "./js/charts.js?v=109",
+        "./js/i18n.js": "./js/i18n.js?v=109",
+        "./js/model3d.js": "./js/model3d.js?v=109",
+        "./js/protocol.js": "./js/protocol.js?v=109",
+        "./js/webhid.js": "./js/webhid.js?v=109"
       }
     }
   </script>
-  <script type="module" src="./js/intro.js?v=108"></script>
-  <script type="module" src="./js/app.js?v=108"></script>
+  <script type="module" src="./js/intro.js?v=109"></script>
+  <script type="module" src="./js/app.js?v=109"></script>
 </body>
 </html>
