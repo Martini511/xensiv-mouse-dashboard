@@ -22,6 +22,14 @@ const MAX_SAMPLES = 400;
 const DOT_RADIUS = 1.8;
 const DOT_ALPHA = 0.75;
 
+// Der Winkel hat einen festen Bereich: eine ganze Umdrehung. Eine Skala, die
+// mitwaechst, zog das Rauschen eines ruhenden Rads ueber die volle Hoehe
+// auseinander - das sah nach Bewegung aus, wo keine war. Nebenbei stehen
+// damit beide Reihen auf derselben Skala; vorher hatte jede ihre eigene und
+// zwei Kurven, die sich kreuzten, bedeuteten nichts.
+const ANGLE_MIN = 0;
+const ANGLE_MAX = 360;
+
 export class WheelCharts {
   constructor(angleCanvas, fieldCanvas) {
     this.angleCanvas = angleCanvas;
@@ -51,6 +59,7 @@ export class WheelCharts {
   drawAngleChart() {
     const { context, width, height } = prepare(this.angleCanvas);
     drawFrame(context, width, height, t("chart.angle"), t("chart.samples"));
+    drawAngleAxis(context, height);
     if (this.samples.length < 2) return;
 
     drawSeries(context, width, height,
@@ -112,18 +121,29 @@ function drawFrame(context, width, height, title, subtitle) {
   context.fillText(subtitle, width - context.measureText(subtitle).width - 14, 17);
 }
 
+// Die beiden Enden der Skala stehen im linken Rand, den der Rahmen ohnehin
+// frei laesst: Ein fester Bereich, der nirgends genannt ist, sieht aus wie
+// ein zufaelliger Ausschnitt.
+function drawAngleAxis(context, height) {
+  context.fillStyle = COLORS.text;
+  context.font = "400 9px 'IBM Plex Mono', monospace";
+  context.fillText(String(ANGLE_MAX), 8, 33);
+  context.fillText(String(ANGLE_MIN), 8, height - 19);
+}
+
 function drawSeries(context, width, height, values, color) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = Math.max(1, max - min);
+  const span = ANGLE_MAX - ANGLE_MIN;
 
   context.strokeStyle = color;
   context.lineWidth = 2;
   context.beginPath();
 
   values.forEach((value, index) => {
+    // Ein Wert ausserhalb der Umdrehung waere ein Messfehler - gezeichnet
+    // wird er am Rand, statt den Rahmen zu verlassen.
+    const inRange = Math.min(ANGLE_MAX, Math.max(ANGLE_MIN, value));
     const x = 34 + (index / (values.length - 1)) * (width - 48);
-    const y = 30 + ((max - value) / span) * (height - 52);
+    const y = 30 + ((ANGLE_MAX - inRange) / span) * (height - 52);
     if (index === 0) context.moveTo(x, y);
     else context.lineTo(x, y);
   });

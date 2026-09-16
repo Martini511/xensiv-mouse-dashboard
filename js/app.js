@@ -637,6 +637,7 @@ function showTriggerConfig(key, config) {
   setRange(`${key}-deadzone`, config.deadzone);
   showSimpleFromFields(key);
   showTriggerMode(key, config.mode);
+  showPressMode(key);
 }
 
 // Der eine Regler der Zeile stellt beide Werte, aber nicht auf dasselbe: Das
@@ -968,8 +969,8 @@ function buildPressBars() {
 
     item.innerHTML = `
       <div class="press-head">
-        <span class="press-name"><i class="press-dot"></i>${sensorLabel(key)}</span>
-        <span class="press-values">${t("press.value")} <b data-role="value">--</b> · ${t("press.threshold")} <b data-role="threshold">--</b></span>
+        <span class="press-name"><i class="press-dot"></i>${sensorLabel(key)}<b class="press-mode" data-role="mode"></b></span>
+        <span class="press-values">${t("press.value")} <b data-role="value">--</b><span data-role="fixed-threshold"> · ${t("press.threshold")} <b data-role="threshold">--</b></span></span>
       </div>
       <div class="press-track">
         <div class="press-fill" data-role="fill"></div>
@@ -983,12 +984,46 @@ function buildPressBars() {
       item,
       value: item.querySelector('[data-role="value"]'),
       threshold: item.querySelector('[data-role="threshold"]'),
+      thresholdPart: item.querySelector('[data-role="fixed-threshold"]'),
+      mode: item.querySelector('[data-role="mode"]'),
       fill: item.querySelector('[data-role="fill"]'),
       marker: item.querySelector('[data-role="marker"]'),
       release: item.querySelector('[data-role="release"]'),
       scale: item.querySelector('[data-role="scale"]'),
     });
   });
+
+  refreshPressModes();
+}
+
+// Die Zeile sagt, nach welcher Art sie gerade abliest. Ohne das stuende dort
+// mal eine Zahl und mal keine, mal eine Marke und mal zwei, ohne dass
+// ersichtlich waere, warum.
+//
+// Massgeblich ist der Stand des Geraets, nicht die Stellung der
+// Schaltflaechen in der Konfiguration: Eine noch nicht geschriebene Aenderung
+// gilt dort noch nicht.
+function showPressMode(key) {
+  const bar = pressBars.get(key);
+  if (!bar) return;
+
+  const relative = relativeMode(key);
+  bar.mode.textContent = t(relative ? "trigger.relative" : "trigger.fixed");
+
+  // Bei fester Schwelle steht die Zahl fuer den einen Punkt, an dem
+  // geschaltet wird - sie ist eine Auskunft. Bei relativer wandert sie mit
+  // dem Finger; eine Zahl, die staendig springt, liest niemand, und die
+  // Marken auf dem Balken sagen dasselbe besser.
+  bar.thresholdPart.hidden = relative;
+
+  // Die Rueckfalllinie liegt bei fester Schwelle fest bei 85 Prozent und ist
+  // keine eigene Einstellung. Zwei Marken behaupteten dort zwei Punkte, von
+  // denen man einen einstellen koennte.
+  bar.release.hidden = !relative;
+}
+
+function refreshPressModes() {
+  SHOWN_SENSORS.forEach(showPressMode);
 }
 
 // Der 2D-TMR-Sensor ist noch in Vorbereitung und hat auf der Seite weder
@@ -1110,6 +1145,7 @@ function showPressure(values) {
 
     observedMax.set(key, Math.max(observedMax.get(key) || 0, pressure));
 
+    showPressMode(key);
     bar.value.textContent = pressure;
     bar.threshold.textContent = pressPoint;
     bar.scale.textContent = pressScale;
@@ -1340,6 +1376,10 @@ function resetLiveReadouts() {
     bar.fill.style.removeProperty("--press-tone");
     bar.item.classList.remove("is-triggered");
   });
+
+  // Ohne Verbindung ist keine Einstellung bekannt; die Zeilen fallen damit
+  // auf die feste Schwelle zurueck.
+  refreshPressModes();
 
   byId("mouse-btn-left").classList.remove("is-pressed");
   byId("mouse-btn-right").classList.remove("is-pressed");

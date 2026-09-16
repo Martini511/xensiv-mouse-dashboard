@@ -408,6 +408,18 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
 .press-values { color: var(--muted); font: 500 11px "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
 .press-values b { color: var(--ink); }
 
+/* Welche Art hier gerade abgelesen wird. Klein und in der Schrift der
+   Messwerte: eine Angabe zur Zeile, keine zweite Ueberschrift. */
+.press-mode {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--muted);
+  font: 500 9px "IBM Plex Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
 .press-track { position: relative; height: 12px; background: #eef1f1; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 /* Den Ton setzt die Anzeige je Messwert: blau im Anlauf, ab der Schwelle grün,
    beides mit dem Druck nachdunkelnd – dieselbe Treppe wie am Modell. Der
