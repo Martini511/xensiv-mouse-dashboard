@@ -2,10 +2,13 @@ import {
   decodeButtonConfig,
   decodeButtonPressure,
   decodeCalibration,
+  decodeTriggerConfig,
+  decodeTriggerState,
   decodeWheelValues,
   encodeButtonConfig,
   encodeCalibration,
   encodeDpi,
+  encodeTriggerConfig,
 } from "./protocol.js";
 import { t } from "./i18n.js";
 
@@ -35,6 +38,9 @@ const COMMAND = Object.freeze({
   setSleepEnabled: 11,
   getSleepEnabled: 12,
   setKeepAwake: 13,
+  setTriggerConfig: 14,
+  getTriggerConfig: 15,
+  getTriggerState: 16,
 });
 
 const STATUS_MESSAGES = [
@@ -101,6 +107,12 @@ export class XensivMouseHid extends EventTarget {
   // GATT-Zweig sagt deshalb nein, und die Oberflaeche fragt hier nach, statt
   // es am Transport zu erraten.
   get sleepControl() {
+    return true;
+  }
+
+  // Dasselbe gilt fuer das Ausloeseverhalten: Auch das laeuft ueber den
+  // Feature-Report und ist deshalb nur hier zu haben.
+  get triggerControl() {
     return true;
   }
 
@@ -342,6 +354,30 @@ export class XensivMouseHid extends EventTarget {
 
   async setKeepAwake(hold) {
     await this.command(COMMAND.setKeepAwake, Uint8Array.of(hold ? 1 : 0));
+  }
+
+  // ─── Auslöseverhalten ────────────────────────────────
+  //
+  // Einstellung und Zustand gehen getrennte Wege: Die Einstellung liegt im
+  // Flash und wird selten geschrieben, der Zustand ist ein Messwert und wird
+  // oft gelesen. Beides je Kanal.
+
+  // Schreibt in den Flash. Deshalb am Ende einer Schiebebewegung aufrufen,
+  // nicht bei jedem Zwischenschritt: Ein Schieberegler liefert waehrend des
+  // Ziehens dutzende Werte, und jeder davon waere ein Schreibvorgang.
+  async writeTriggerConfig(channel, config) {
+    await this.command(COMMAND.setTriggerConfig,
+      encodeTriggerConfig(channel, config));
+  }
+
+  async readTriggerConfig(channel) {
+    return decodeTriggerConfig(
+      await this.command(COMMAND.getTriggerConfig, Uint8Array.of(channel)));
+  }
+
+  async readTriggerState(channel) {
+    return decodeTriggerState(
+      await this.command(COMMAND.getTriggerState, Uint8Array.of(channel)));
   }
 
   // ─── Übertragung ────────────────────────────────────

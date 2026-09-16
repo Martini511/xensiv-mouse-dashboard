@@ -110,6 +110,70 @@ export function encodeCalibrationCommand(command) {
   return data;
 }
 
+// ─── Auslöseverhalten ─────────────────────────────
+
+// Zwei Arten, aus einem Messwert einen Tastendruck zu machen.
+//
+// Fest: oberhalb der Schwelle gedrückt, unterhalb von 85 Prozent der Schwelle
+// wieder los. Zwei Linien, die stehen bleiben.
+//
+// Schnell: die Firmware merkt sich den tiefsten Punkt und lässt los, sobald
+// man um `releaseDelta` zurückgeht - und löst wieder aus, sobald man um
+// `pressDelta` nachdrückt. Die beiden Linien wandern damit mit dem Finger.
+// Erneut klicken heißt dann nicht mehr, erst über einen festen Punkt
+// zurückzukommen. Nahe der Ruhelage erzwingt die Totzone das Loslassen und
+// setzt die Verfolgung zurück.
+export const TRIGGER_MODE = Object.freeze({ fixed: 0, rapid: 1 });
+
+// Der Rückfall in der festen Betriebsart steckt in der Firmware, nicht in
+// einer Einstellung. Hier steht er, damit die Anzeige die Rückfalllinie auch
+// dann zeichnen kann, wenn vom Gerät gerade kein Zustand vorliegt.
+export const FIXED_RELEASE_RATIO = 0.85;
+
+// Die Kanalnummer ist die Stelle in SENSOR_KEYS - dieselbe Reihenfolge, in
+// der auch die Tastenkonfiguration ihre fünf Bytes führt. Der 2D-TMR-Sensor
+// hat auf der Seite keine Zeile, im Protokoll aber seinen Platz: Wer die
+// sichtbaren Sensoren durchzählte statt hier nachzusehen, verschöbe alle
+// Kanäle dahinter um eins.
+export function channelOf(key) {
+  return SENSOR_KEYS.indexOf(key);
+}
+
+export function encodeTriggerConfig(channel, config) {
+  return Uint8Array.of(
+    channel,
+    config.mode,
+    config.pressDelta,
+    config.releaseDelta,
+    config.deadzone,
+  );
+}
+
+export function decodeTriggerConfig(value) {
+  requireLength(value, 4, t("trigger.title"));
+  return {
+    mode: value.getUint8(0),
+    pressDelta: value.getUint8(1),
+    releaseDelta: value.getUint8(2),
+    deadzone: value.getUint8(3),
+  };
+}
+
+// `pressPoint` und `releasePoint` sind die Linien, die gerade gelten - in der
+// festen Betriebsart stehen sie, in der schnellen wandern sie. Gezeichnet
+// werden sie deshalb in beiden Fällen gleich.
+export function decodeTriggerState(value) {
+  requireLength(value, 6, t("trigger.title"));
+  return {
+    value: value.getUint8(0),
+    peak: value.getUint8(1),
+    valley: value.getUint8(2),
+    pressPoint: value.getUint8(3),
+    releasePoint: value.getUint8(4),
+    pressed: Boolean(value.getUint8(5)),
+  };
+}
+
 function requireLength(value, expected, label) {
   if (value.byteLength !== expected) {
     throw new Error(t("error.shortValue",

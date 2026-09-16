@@ -63,6 +63,12 @@ export class XensivMouseBluetooth extends EventTarget {
     return false;
   }
 
+  // Dasselbe gilt fuer das Ausloeseverhalten - auch das liegt auf dem
+  // Feature-Report und ist ueber GATT nicht zu erreichen.
+  get triggerControl() {
+    return false;
+  }
+
   // ─── Verbindungsaufbau ──────────────────────────────
 
   async connect() {

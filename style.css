@@ -413,7 +413,31 @@ h1, h2 { margin: 5px 0 0; font-size: clamp(26px, 3vw, 42px); line-height: 1.05; 
    beides mit dem Druck nachdunkelnd – dieselbe Treppe wie am Modell. Der
    Rückfallwert gilt nur, solange noch nichts gemessen wurde. */
 .press-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--press-tone, var(--accent-soft)); transition: width .05s linear, background-color .05s linear; }
-.press-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--signal); transform: translateX(-50%); }
+/* Zwei Linien statt einer: der Punkt, an dem die Taste ausloest, und der, an
+   dem sie wieder loslaesst. In der festen Betriebsart stehen sie, in der
+   schnellen wandern sie mit dem Finger - und genau das sichtbar zu machen ist
+   der Sinn der Uebung.
+
+   Der helle Saum ringsum ist noetig, weil beide Linien mal auf dem gefuellten,
+   mal auf dem leeren Teil des Balkens liegen. Ohne ihn verschwand die Marke
+   gerade dann, wenn der Balken sie erreichte - also in dem Augenblick, auf den
+   es ankommt. */
+.press-marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--signal);
+  box-shadow: 0 0 0 1px #ffffffa6;
+  transform: translateX(-50%);
+}
+
+/* Die Rueckfalllinie gehoert zur selben Sache, ist aber die zweite Auskunft:
+   gestrichelt statt durchgezogen. */
+.press-marker.is-release {
+  background: repeating-linear-gradient(to bottom, var(--signal) 0 3px, #ffffffa6 3px 6px);
+}
+
 .press-scale { display: flex; justify-content: space-between; margin-top: 5px; color: var(--muted); font: 10px "IBM Plex Mono", monospace; }
 
 /* ─── Werkzeugleiste ─────────────────────────────── */
@@ -580,7 +604,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .raw-answer { color: var(--muted); font-weight: 500; letter-spacing: .06em; }
 
 .sensor-list { border: 1px solid var(--line); border-top: 0; }
-.sensor-row { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr 50px; align-items: center; gap: 20px; min-height: 66px; padding: 0 20px; border-top: 1px solid var(--line); }
+.sensor-row { display: grid; grid-template-columns: minmax(130px, 1fr) 124px 2fr 44px; align-items: center; gap: 18px; min-height: 66px; padding: 0 20px; }
 .sensor-row label { font-weight: 700; }
 .sensor-row label small { display: block; color: var(--muted); font-weight: 400; }
 .sensor-header { min-height: 42px; color: var(--muted); font: 500 10px "IBM Plex Mono", monospace; text-transform: uppercase; }
@@ -588,6 +612,63 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .threshold { display: flex; align-items: center; gap: 10px; }
 .threshold output { min-width: 28px; font: 500 11px "IBM Plex Mono", monospace; }
 .sensor-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); }
+
+/* Das Kaestchen bleibt in der letzten Spalte, auch wenn die Schwelle davor
+   ausgeblendet ist: Sonst ruecke es in deren Platz und staende bei den
+   schnellen Zeilen woanders als bei den festen - in einer Liste, deren
+   Nutzen gerade darin liegt, dass man sie senkrecht abliest.
+
+   `-2` zaehlt von hinten und trifft damit in beiden Rastern die letzte
+   Spalte: im breiten mit vier, im schmalen mit zwei. */
+.sensor-row > input[type="checkbox"] { grid-column: -2; }
+
+/* Die Trennlinie sitzt am Block, nicht mehr an der Zeile: Sonst liefe sie
+   zwischen einer Zeile und den Reglern hindurch, die zu ihr gehoeren, und
+   ordnete sie dem Sensor darueber zu. */
+.sensor-block { border-top: 1px solid var(--line); }
+
+/* Zwei Schaltflaechen, die wie eine wirken: Die gewaehlte ist gefuellt, die
+   andere wartet daneben. Ein Aufklappmenue waere zu viel Aufhebens fuer zwei
+   Moeglichkeiten, zwei Kaestchen liessen offen, dass sie sich ausschliessen. */
+.mode-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.mode-switch button {
+  flex: 1 1 0;
+  padding: 6px 0;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted);
+  font: 500 11px "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  transition: background-color .15s ease, color .15s ease;
+}
+.mode-switch button + button { border-left: 1px solid var(--line); }
+.mode-switch button:hover:not(:disabled):not(.is-active) { background: #f0f4f4; color: var(--ink); }
+.mode-switch button.is-active { background: var(--accent); color: #fff; }
+.mode-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mode-switch:not([data-state="ready"]) { cursor: help; }
+
+/* Die drei Regler der schnellen Betriebsart stehen unter der Zeile, nicht
+   darin: In einer Reihe mit Name, Betriebsart und Freigabe bliebe fuer jeden
+   von ihnen ein Streifen von wenigen Millimetern. */
+.trigger-params {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px 26px;
+  padding: 2px 20px 18px;
+  background: #fbfcfc;
+}
+.trigger-params label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 3px 10px; font-size: 12px; }
+.trigger-params label span { color: var(--muted); }
+.trigger-params label input { grid-column: 1 / -1; }
+.trigger-params output { font: 500 11px "IBM Plex Mono", monospace; }
+
+/* `hidden` allein genuegt hier nicht. Das Merkmal wirkt ueber die Regel
+   `display: none` des Browsers, und die steht in dessen eigenem Stilblatt -
+   jede Klassenregel von hier schlaegt sie, auch eine so schlichte wie
+   `display: flex`. Ohne diese Zeile blieben beide Ansichten zugleich
+   sichtbar, und der Schieber fuer die Schwelle staende neben den Reglern,
+   die ihn ersetzen sollen. */
+[data-trigger-view][hidden] { display: none; }
 
 /* ─── Radkalibrierung ────────────────────────────── */
 
@@ -681,6 +762,10 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
   .control-block + .control-block { border-left: 0; border-top: 1px solid var(--line); }
   .sensor-row { grid-template-columns: 1fr 44px; padding: 14px 20px; gap: 12px; }
   .sensor-row .threshold { grid-column: 1 / -1; }
+  /* Auf dieser Breite reihen sich Betriebsart und Schwelle unter den Namen,
+     statt neben ihm um denselben Platz zu streiten. */
+  .sensor-row .mode-switch { grid-column: 1 / -1; }
+  .trigger-params { grid-template-columns: 1fr; padding-inline: 20px; }
   .sensor-header { display: none; }
   .toolbar { align-items: flex-start; flex-direction: column; }
   .calibration-actions { flex-wrap: wrap; }

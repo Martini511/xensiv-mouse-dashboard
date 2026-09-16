@@ -2,7 +2,14 @@ import { XensivMouseHid } from "./webhid.js";
 import { XensivMouseBluetooth } from "./bluetooth.js";
 import { WheelCharts } from "./charts.js";
 import { MouseModel, pressColor } from "./model3d.js";
-import { PRESS_MAX, SENSOR_KEYS, sensorLabel } from "./protocol.js";
+import {
+  FIXED_RELEASE_RATIO,
+  PRESS_MAX,
+  SENSOR_KEYS,
+  TRIGGER_MODE,
+  channelOf,
+  sensorLabel,
+} from "./protocol.js";
 import { LANGUAGES, language, onLanguage, setLanguage, t, translate }
   from "./i18n.js";
 
@@ -207,6 +214,12 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
   updateSleepAvailability();
   await loadSleepPreference();
 
+  // Auch das Auslöseverhalten liegt im Gerät und kann anderswo verstellt
+  // worden sein. Gelesen wird es je Kanal einzeln - ein Sammelbefehl dafür
+  // besteht nicht.
+  updateTriggerAvailability();
+  await loadTriggerConfigs();
+
   previewLed(byId("led-color").value);
   if (liveTabActive()) startMonitoring();
 });
@@ -226,6 +239,16 @@ mouse.addEventListener("disconnected", ({ detail }) => {
   // die es keine Quelle mehr gibt.
   showSleepPreference(null);
   updateSleepAvailability();
+
+  // Dasselbe gilt fürs Auslöseverhalten. Die Regler behalten ihre Stellung -
+  // sie zeigt, was zuletzt im Gerät stand -, aber gemessene Zustände gibt es
+  // ab hier keine mehr, und die Marken fallen auf die feste Schwelle
+  // zurück. Dass die Firmware den Befehl kennt, wird beim nächsten Verbinden
+  // neu erprobt.
+  triggerConfigs.clear();
+  triggerStates.clear();
+  triggerStateAvailable = true;
+  updateTriggerAvailability();
 
   // Die Seite steht ab hier bereit fuer eine neue Verbindung, nicht fuer
   // die Fortsetzung der alten. Der Knopf zum Neuaufbau gehoert deshalb
@@ -434,6 +457,252 @@ function updateSleepAvailability() {
   sleepField.title = t(sleepField.dataset.i18nTitle);
 }
 
+// ─── Auslöseverhalten ─────────────────────────────────
+//
+// Je Sensorkanal zwei Arten, aus einem Messwert einen Tastendruck zu machen.
+//
+// Fest ist das Bisherige: oberhalb der Schwelle gedrückt, unterhalb von 85
+// Prozent davon wieder los. Zwei Linien, die stehen bleiben.
+//
+// Schnell folgt stattdessen dem Signal. Die Firmware merkt sich den tiefsten
+// Punkt und lässt los, sobald man um `releaseDelta` zurückgeht; drückt man um
+// `pressDelta` nach, löst sie wieder aus. Ein erneuter Klick braucht damit
+// keinen Weg zurück über einen festen Punkt – das ist der ganze Zweck.
+//
+// Beides liegt je Kanal im Flash, und die Firmware behält beide Sätze von
+// Werten. Hin und her zu schalten verliert deshalb nichts.
+
+// Was das Gerät zuletzt gemeldet hat – nicht, was auf der Seite eingestellt
+// ist. Der Unterschied zählt: Nach einem Schreibvorgang wird nachgefragt, und
+// erst diese Antwort landet hier.
+const triggerConfigs = new Map();
+const triggerStates = new Map();
+
+// So schnell, wie der Lastdeckel es zulässt. Ein kleinerer Wert brächte
+// nichts: Die Schleife kommt über die Funkstrecke ohnehin nur auf wenige
+// Durchläufe je Sekunde, und mehr als einen Kanal je Durchlauf zu holen ginge
+// auf Kosten genau der Reserve, die die Tasten der Maus durchlässt.
+const TRIGGER_INTERVAL = 50;
+
+// Fragt die Firmware den Zustand nicht her, wird nicht weiter gefragt. Sonst
+// liefe die Live-Schleife bei jedem Durchlauf in denselben Fehler.
+let triggerStateAvailable = true;
+let triggerCursor = 0;
+
+const triggerBlocks = [...document.querySelectorAll("[data-sensor]")];
+
+triggerBlocks.forEach((block) => {
+  const key = block.dataset.sensor;
+
+  block.querySelectorAll(".mode-switch button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.mode === "rapid"
+        ? TRIGGER_MODE.rapid
+        : TRIGGER_MODE.fixed;
+
+      // Schon die gewählte Betriebsart: Dann gibt es nichts zu schreiben.
+      // Ein Schreibvorgang in den Flash für einen Klick ohne Wirkung wäre
+      // Verschleiß ohne Gegenwert.
+      if (triggerConfigs.get(key)?.mode === mode) return;
+      writeTriggerConfig(key, { mode });
+    });
+  });
+
+  // `change`, nicht `input`: Geschrieben wird erst, wenn der Regler
+  // losgelassen ist. Während des Ziehens liefert er Dutzende Zwischenwerte,
+  // und jeder davon ginge in den Flash.
+  ["press-delta", "release-delta", "deadzone"].forEach((field) => {
+    byId(`${key}-${field}`).addEventListener("change",
+      () => writeTriggerConfig(key, {}));
+  });
+});
+
+function triggerBlock(key) {
+  return triggerBlocks.find((block) => block.dataset.sensor === key);
+}
+
+async function writeTriggerConfig(key, changes) {
+  if (!mouse.triggerControl || !mouse.connected) return;
+
+  const config = { ...readTriggerFields(key), ...changes };
+
+  try {
+    await mouse.writeTriggerConfig(channelOf(key), config);
+
+    // Nachfragen statt glauben: Die Firmware legt die Werte im Flash ab und
+    // darf sie dabei zurechtstutzen. Angezeigt wird, was dort steht.
+    showTriggerConfig(key, await mouse.readTriggerConfig(channelOf(key)));
+  } catch (error) {
+    showError(new Error(t("msg.triggerFailed",
+      { sensor: sensorLabel(key), error: error.message })));
+
+    // Die Anzeige folgt dem Gerät, nicht dem gescheiterten Wunsch.
+    await loadTriggerConfig(key);
+  }
+}
+
+// Die Betriebsart steht nicht in den Reglern, sondern in dem, was das Gerät
+// zuletzt gemeldet hat. Ohne Meldung gilt die Werkseinstellung.
+function readTriggerFields(key) {
+  return {
+    mode: triggerConfigs.get(key)?.mode ?? TRIGGER_MODE.rapid,
+    pressDelta: numberValue(`${key}-press-delta`),
+    releaseDelta: numberValue(`${key}-release-delta`),
+    deadzone: numberValue(`${key}-deadzone`),
+  };
+}
+
+async function loadTriggerConfig(key) {
+  if (!mouse.triggerControl || !mouse.connected) return true;
+
+  try {
+    showTriggerConfig(key, await mouse.readTriggerConfig(channelOf(key)));
+    return true;
+  } catch (error) {
+    showError(new Error(t("msg.triggerUnreadable",
+      { sensor: sensorLabel(key), error: error.message })));
+    return false;
+  }
+}
+
+// Beim Verbinden alle Kanäle der Reihe nach. Scheitert der erste, kennt die
+// Firmware den Befehl nicht – dann hat es keinen Zweck, die übrigen einzeln
+// abzufragen und viermal dasselbe zu melden.
+async function loadTriggerConfigs() {
+  for (const key of SHOWN_SENSORS) {
+    if (!await loadTriggerConfig(key)) return;
+  }
+
+  await loadTriggerStates();
+}
+
+// Einmal nach dem Verbinden, damit die Linien auch dort stehen, wo gerade
+// nichts laufend abgefragt wird – in der festen Betriebsart bewegen sie sich
+// ohnehin nicht.
+async function loadTriggerStates() {
+  for (const key of SHOWN_SENSORS) {
+    if (!await readTriggerStateInto(key)) return;
+  }
+}
+
+async function readTriggerStateInto(key) {
+  if (!mouse.triggerControl || !mouse.connected || !triggerStateAvailable) {
+    return false;
+  }
+
+  try {
+    triggerStates.set(key, await mouse.readTriggerState(channelOf(key)));
+    return true;
+  } catch (error) {
+    // Ist die Verbindung fort, gehört der Fehler nach oben: Die Live-Schleife
+    // hält daran an. Kennt die Firmware den Befehl bloß nicht, ist das kein
+    // Grund aufzuhören – die Balken zeigen dann wieder die feste Schwelle.
+    if (!mouse.connected) throw error;
+
+    triggerStateAvailable = false;
+    triggerStates.clear();
+    return false;
+  }
+}
+
+// Laufend gelesen wird nur, was sich auch bewegt: die schnelle Betriebsart.
+// In der festen stehen die Linien an der Schwelle, und die kennt die Seite
+// ohnehin - dort wäre jede Abfrage verschenkt.
+//
+// Die Sensoren, die je Taste tatsächlich messen, stehen zweimal in der Runde
+// und kommen damit doppelt so oft an die Reihe: An ihnen wird eingestellt.
+// Die übrigen bleiben trotzdem darin. Sie ganz auszulassen käme billiger,
+// hinterließe aber eine Linie, die stehen bleibt, während sich der Wert
+// darunter bewegt - und das wäre keine sparsame Anzeige, sondern eine
+// falsche. Die Kosten bleiben ohnehin gleich: Geholt wird ein Kanal je
+// Durchlauf, wie viele auch in der Runde stehen.
+function liveTriggerKeys() {
+  const active = [activeSensor("left"), activeSensor("right")];
+
+  return SHOWN_SENSORS
+    .filter(rapidMode)
+    .flatMap((key) => (active.includes(key) ? [key, key] : [key]));
+}
+
+async function pollTriggerState() {
+  if (!triggerStateAvailable) return;
+
+  const keys = liveTriggerKeys();
+  if (keys.length === 0) return;
+
+  const key = keys[triggerCursor % keys.length];
+  triggerCursor += 1;
+  await readTriggerStateInto(key);
+}
+
+function showTriggerConfig(key, config) {
+  triggerConfigs.set(key, config);
+
+  setRange(`${key}-press-delta`, config.pressDelta);
+  setRange(`${key}-release-delta`, config.releaseDelta);
+  setRange(`${key}-deadzone`, config.deadzone);
+  showTriggerMode(key, config.mode);
+}
+
+// Die Anzeige neben dem Regler hängt am `input`-Ereignis, und das bleibt aus,
+// wenn der Wert von hier gesetzt wird. Ohne diese Zeile stünde neben dem
+// verschobenen Regler weiter die alte Zahl.
+function setRange(id, value) {
+  const input = byId(id);
+  input.value = value;
+  input.nextElementSibling.value = input.value;
+}
+
+function showTriggerMode(key, mode) {
+  const block = triggerBlock(key);
+  const rapid = mode === TRIGGER_MODE.rapid;
+
+  block.querySelectorAll(".mode-switch button").forEach((button) => {
+    const chosen = (button.dataset.mode === "rapid") === rapid;
+    button.classList.toggle("is-active", chosen);
+    button.setAttribute("aria-pressed", String(chosen));
+  });
+
+  // Die Schwelle wirkt in der schnellen Betriebsart nicht. Einen Regler
+  // stehen zu lassen, der nichts tut, wäre schlimmer als ihn wegzunehmen: Er
+  // lädt dazu ein, an ihm zu drehen und sich zu wundern.
+  block.querySelectorAll("[data-trigger-view]").forEach((view) => {
+    view.hidden = (view.dataset.triggerView === "rapid") !== rapid;
+  });
+}
+
+// Zwei Bedingungen, zwei verschiedene Auskünfte: Über GATT gibt es das
+// Auslöseverhalten grundsätzlich nicht, ohne Verbindung nur gerade jetzt
+// nicht.
+function updateTriggerAvailability() {
+  const supported = Boolean(mouse.triggerControl);
+  const usable = supported && mouse.connected;
+
+  triggerBlocks.forEach((block) => {
+    block.querySelectorAll(".mode-switch button, .trigger-params input")
+      .forEach((element) => { element.disabled = !usable; });
+
+    const modeSwitch = block.querySelector(".mode-switch");
+
+    // Dieselben drei Zustaende wie beim Ruhezustand, und aus demselben
+    // Grund: "gar nicht" und "gerade nicht" sehen gleich aus, meinen aber
+    // Verschiedenes. Das Merkmal sagt es, auch wenn die Gestaltung heute
+    // nur nach "bedienbar" fragt.
+    modeSwitch.dataset.state =
+      !supported ? "unsupported" : usable ? "ready" : "offline";
+
+    if (usable) {
+      delete modeSwitch.dataset.i18nTitle;
+      modeSwitch.removeAttribute("title");
+      return;
+    }
+
+    modeSwitch.dataset.i18nTitle =
+      supported ? "trigger.needsConnection" : "trigger.unavailable";
+    modeSwitch.title = t(modeSwitch.dataset.i18nTitle);
+  });
+}
+
 // ─── Live-Überwachung ─────────────────────────────────
 // Läuft, solange der Reiter offen und die Maus verbunden ist.
 
@@ -472,6 +741,7 @@ function trackWheelRate() {
 
 async function monitorLoop() {
   let nextPressure = 0;
+  let nextTrigger = 0;
 
   while (monitoring && mouse.connected) {
     const startedAt = Date.now();
@@ -486,6 +756,15 @@ async function monitorLoop() {
       if (Date.now() >= nextPressure) {
         showPressure(await mouse.readButtonPressure());
         nextPressure = Date.now() + PRESSURE_INTERVAL;
+      }
+
+      // Der Auslösezustand kommt je Kanal einzeln herein und deshalb reihum,
+      // einer je Durchlauf. Alle auf einmal zu holen kostete so viele
+      // Anfragen, wie es Kanäle gibt - und der Kanal soll zur Hälfte frei
+      // bleiben, damit die Tasten der Maus durchkommen.
+      if (Date.now() >= nextTrigger) {
+        await pollTriggerState();
+        nextTrigger = Date.now() + TRIGGER_INTERVAL;
       }
     } catch (error) {
       stopMonitoring();
@@ -620,6 +899,7 @@ function buildPressBars() {
       <div class="press-track">
         <div class="press-fill" data-role="fill"></div>
         <div class="press-marker" data-role="marker"></div>
+        <div class="press-marker is-release" data-role="release"></div>
       </div>
       <div class="press-scale"><span>0</span><span data-role="scale">${PRESS_MAX}</span></div>`;
 
@@ -630,6 +910,7 @@ function buildPressBars() {
       threshold: item.querySelector('[data-role="threshold"]'),
       fill: item.querySelector('[data-role="fill"]'),
       marker: item.querySelector('[data-role="marker"]'),
+      release: item.querySelector('[data-role="release"]'),
       scale: item.querySelector('[data-role="scale"]'),
     });
   });
@@ -745,30 +1026,61 @@ function showPressure(values) {
   SHOWN_SENSORS.forEach((key) => {
     const bar = pressBars.get(key);
     const pressure = values[key];
-    const threshold = thresholdOf(key);
+    const pressPoint = pressPointOf(key);
     const tripped = isPressed(values, key);
 
     observedMax.set(key, Math.max(observedMax.get(key) || 0, pressure));
 
     bar.value.textContent = pressure;
-    bar.threshold.textContent = threshold;
+    bar.threshold.textContent = pressPoint;
     bar.scale.textContent = pressScale;
     bar.fill.style.width = `${percentOfScale(pressure)}%`;
     bar.fill.style.setProperty("--press-tone",
-      pressColor(pressShare(pressure, threshold, tripped), tripped));
-    bar.marker.style.left = `${percentOfScale(threshold)}%`;
+      pressColor(pressShare(pressure, pressPoint, tripped), tripped));
+    bar.marker.style.left = `${percentOfScale(pressPoint)}%`;
+    bar.release.style.left = `${percentOfScale(releasePointOf(key))}%`;
     bar.item.classList.toggle("is-triggered", tripped);
   });
 
   Object.entries(active).forEach(([side, key]) => {
     const pressed = isPressed(values, key);
     byId(`mouse-btn-${side}`).classList.toggle("is-pressed", pressed);
-    model?.setButton(side, pressShare(values[key], thresholdOf(key), pressed),
+    model?.setButton(side, pressShare(values[key], pressPointOf(key), pressed),
       pressed);
   });
 
   byId("stage-press").textContent =
     `${values[active.left]} / ${values[active.right]}`;
+}
+
+// Wo die Taste gerade auslöst und wo sie wieder loslässt.
+//
+// In der schnellen Betriebsart wandern beide Linien mit dem Finger, und wo
+// sie stehen, weiß allein die Firmware - also kommt es von dort. In der
+// festen Betriebsart stehen sie an der Schwelle, und die steht auf der Seite:
+// Sie von dort zu nehmen ist nicht nur billiger, sondern auch richtiger. Ein
+// beim Verbinden gelesener Zustand würde sonst weiter angezeigt, nachdem die
+// Schwelle längst neu geschrieben wurde.
+function pressPointOf(key) {
+  if (rapidMode(key)) {
+    const state = triggerStates.get(key);
+    if (state) return state.pressPoint;
+  }
+
+  return thresholdOf(key);
+}
+
+function releasePointOf(key) {
+  if (rapidMode(key)) {
+    const state = triggerStates.get(key);
+    if (state) return state.releasePoint;
+  }
+
+  return Math.round(thresholdOf(key) * FIXED_RELEASE_RATIO);
+}
+
+function rapidMode(key) {
+  return triggerConfigs.get(key)?.mode === TRIGGER_MODE.rapid;
 }
 
 // Wie weit ist der Druck in seinem Abschnitt fortgeschritten? Unterhalb der
@@ -783,6 +1095,16 @@ function pressShare(pressure, threshold, tripped) {
 }
 
 function isPressed(values, key) {
+  // In der schnellen Betriebsart laesst sich der Tastendruck hier nicht
+  // ausrechnen: Er haengt am Verlauf der letzten Messwerte, und den kennt nur
+  // die Firmware. Dort gilt deshalb ihr Urteil. In der festen Betriebsart
+  // bleibt der oertliche Vergleich - er ist richtig und kommt ohne die
+  // Verzoegerung einer weiteren Abfrage.
+  if (triggerConfigs.get(key)?.mode === TRIGGER_MODE.rapid) {
+    const state = triggerStates.get(key);
+    if (state) return state.pressed;
+  }
+
   return values[key] > 0 && values[key] >= thresholdOf(key);
 }
 
@@ -1336,6 +1658,7 @@ translate();
 buildPressBars();
 setDeviceControls(false);
 updateSleepAvailability();
+updateTriggerAvailability();
 showActiveSensors();
 labelSensorBoxes();
 previewLed(byId("led-color").value);

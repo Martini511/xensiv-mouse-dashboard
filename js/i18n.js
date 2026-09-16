@@ -99,8 +99,32 @@ const TEXTS = {
     "buttons.load": "Load",
     "buttons.write": "Write to mouse",
     "buttons.colSensor": "Sensor",
+    "buttons.colMode": "Trigger",
     "buttons.colThreshold": "Threshold",
     "buttons.colActive": "Active",
+
+    "trigger.title": "Trigger behaviour",
+    "trigger.aria": "Trigger mode",
+    "trigger.fixed": "Fixed",
+    "trigger.rapid": "Rapid",
+    "trigger.press": "Press sensitivity",
+    "trigger.release": "Release sensitivity",
+    "trigger.deadzone": "Deadzone",
+    "trigger.needsConnection": "Connect the mouse first. The trigger mode is "
+      + "read from the device, not remembered by this page.",
+    "trigger.unavailable": "Requires WebHID. This setting travels on the HID "
+      + "feature report, which Web Bluetooth cannot reach \u2013 the HID service "
+      + "is on the browser blocklist. Please use a current Chrome or Edge over "
+      + "HTTPS and pair the mouse as a HID device.",
+    "trigger.hint": "Fixed actuates above the threshold and releases at 85\u00a0% "
+      + "of it. Rapid follows the signal instead: it releases as soon as you "
+      + "back off by the release sensitivity and fires again once you push "
+      + "back in by the press sensitivity, so a repeat click needs no return "
+      + "past a fixed point. Lower values mean more sensitive. The deadzone "
+      + "near rest forces a release and resets the tracking. Both modes keep "
+      + "their own values in the mouse, so switching back and forth loses "
+      + "nothing. The two marker lines on the live pressure bars show where "
+      + "the device is actually switching.",
     "buttons.hint1": "Only one sensor measures per button: enabling one "
       + "releases the one so far on the same side. The thresholds take effect "
       + "in the device itself \u2013 if a threshold lies above the pressure the "
@@ -200,6 +224,11 @@ const TEXTS = {
     "msg.motionOn": "Motion light switched on",
     "msg.dpiSet": "Resolution set to {dpi} DPI",
     "msg.buttonsLoaded": "Button settings loaded",
+    "msg.triggerSet": "{sensor}: trigger mode {mode}",
+    "msg.triggerTuned": "{sensor}: {what} {value}",
+    "msg.triggerFailed": "{sensor}: trigger setting not written \u2013 {error}",
+    "msg.triggerUnreadable": "{sensor}: trigger setting not readable \u2013 "
+      + "{error}",
     "msg.buttonsSaved": "Button settings saved",
     "msg.calLoaded": "Calibration loaded",
     "msg.calSaved": "Calibration saved",
@@ -321,8 +350,36 @@ const TEXTS = {
     "buttons.load": "Laden",
     "buttons.write": "In die Maus schreiben",
     "buttons.colSensor": "Sensor",
-    "buttons.colThreshold": "Schwellwert",
+    "buttons.colMode": "Ausl\u00f6sung",
+    "buttons.colThreshold": "Schwelle",
     "buttons.colActive": "Aktiv",
+
+    "trigger.title": "Ausl\u00f6severhalten",
+    "trigger.aria": "Ausl\u00f6severhalten",
+    "trigger.fixed": "Fest",
+    "trigger.rapid": "Schnell",
+    "trigger.press": "Ansprechen",
+    "trigger.release": "Loslassen",
+    "trigger.deadzone": "Totzone",
+    "trigger.needsConnection": "Zuerst die Maus verbinden. Das "
+      + "Ausl\u00f6severhalten kommt aus dem Ger\u00e4t und wird von dieser Seite "
+      + "nicht gemerkt.",
+    "trigger.unavailable": "Ben\u00f6tigt WebHID. Diese Einstellung l\u00e4uft \u00fcber "
+      + "den HID-Feature-Report, und den erreicht Web Bluetooth nicht \u2013 der "
+      + "HID-Dienst steht auf der Sperrliste des Browsers. Bitte aktuelles "
+      + "Chrome oder Edge \u00fcber HTTPS verwenden und die Maus als HID-Ger\u00e4t "
+      + "koppeln.",
+    "trigger.hint": "Fest l\u00f6st oberhalb der Schwelle aus und f\u00e4llt bei "
+      + "85\u00a0% davon wieder ab. Schnell folgt stattdessen dem Signal: Es "
+      + "l\u00e4sst los, sobald man um den Wert f\u00fcr das Loslassen zur\u00fcckgeht, und "
+      + "l\u00f6st wieder aus, sobald man um den Wert f\u00fcrs Ansprechen nachdr\u00fcckt "
+      + "\u2013 ein erneuter Klick braucht damit keinen Weg zur\u00fcck \u00fcber einen "
+      + "festen Punkt. Kleinere Werte hei\u00dfen empfindlicher. Die Totzone nahe "
+      + "der Ruhelage erzwingt das Loslassen und setzt die Verfolgung "
+      + "zur\u00fcck. Beide Betriebsarten behalten ihre eigenen Werte in der "
+      + "Maus; hin und her zu schalten verliert also nichts. Die beiden "
+      + "Marken auf den Druckbalken der Live-Ansicht zeigen, wo das Ger\u00e4t "
+      + "tats\u00e4chlich schaltet.",
     "buttons.hint1": "Je Taste misst nur ein Sensor: Eine Freigabe hebt die "
       + "bisherige derselben Seite auf. Die Schwellwerte wirken im Ger\u00e4t "
       + "selbst \u2013 liegt eine Schwelle \u00fcber dem Druck, den der Sensor "
@@ -426,6 +483,12 @@ const TEXTS = {
     "msg.motionOn": "Bewegungslicht eingeschaltet",
     "msg.dpiSet": "Aufl\u00f6sung auf {dpi} DPI gesetzt",
     "msg.buttonsLoaded": "Tasteneinstellungen geladen",
+    "msg.triggerSet": "{sensor}: Ausl\u00f6severhalten {mode}",
+    "msg.triggerTuned": "{sensor}: {what} {value}",
+    "msg.triggerFailed": "{sensor}: Ausl\u00f6severhalten nicht geschrieben \u2013 "
+      + "{error}",
+    "msg.triggerUnreadable": "{sensor}: Ausl\u00f6severhalten nicht lesbar \u2013 "
+      + "{error}",
     "msg.buttonsSaved": "Tasteneinstellungen gespeichert",
     "msg.calLoaded": "Kalibrierung geladen",
     "msg.calSaved": "Kalibrierung gespeichert",
