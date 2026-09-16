@@ -551,9 +551,14 @@ async function writeTriggerConfig(key) {
 // Geschrieben wird nur, was sich geändert hat. Die Werte liegen im Flash,
 // und vier unveränderte Kanäle bei jedem Druck auf „Schreiben“ wären
 // Verschleiß ohne Gegenwert.
-async function writeTriggerConfigs() {
+//
+// Beim Zurücksetzen gilt das nicht: Dort soll ein bekannter Stand entstehen,
+// und ob er schon besteht, weiß die Seite nur, wenn sie ihn vorher lesen
+// konnte. Ein fehlgeschlagener Abgleich ließe den Ruecksetzer sonst lautlos
+// nichts tun.
+async function writeTriggerConfigs({ force = false } = {}) {
   for (const key of SHOWN_SENSORS) {
-    if (!triggerChanged(key)) continue;
+    if (!force && !triggerChanged(key)) continue;
     if (!await writeTriggerConfig(key)) return false;
   }
 
@@ -1398,6 +1403,61 @@ function previewDpi() {
 }
 
 // ─── Tastensensorik ───────────────────────────────────
+
+// Der Stand, auf den „Auf Standard“ zurücksetzt. Je Seite misst der
+// Force-Sensor; der Hall-Sensor daneben behält seinen Wert, ist aber nicht
+// freigegeben. Die Zahl gilt beiden Schwellen: Sie steht als feste Schwelle
+// im Gerät und zugleich als relative, damit ein Umschalten der Art nicht in
+// einer fremden Einstellung landet.
+const BUTTON_DEFAULTS = Object.freeze({
+  leftForce: { threshold: 25, enabled: true },
+  leftHall: { threshold: 10, enabled: false },
+  rightForce: { threshold: 15, enabled: true },
+  rightHall: { threshold: 10, enabled: false },
+});
+
+byId("default-buttons").addEventListener("click", async () => {
+  if (!window.confirm(t("buttons.defaultConfirm"))) return;
+
+  applyButtonDefaults();
+
+  const config = readButtonConfig();
+
+  try {
+    await mouse.writeButtonConfig(config);
+    rememberWritten(config);
+  } catch (error) {
+    showError(error);
+    return;
+  }
+
+  // Die übliche Rückfrage vor dem Schreiben entfällt hier: Sie warnt vor
+  // Schwellen, die kein Sensor erreicht, und genau davon ist der
+  // Auslieferungsstand frei. Zwei Dialoge hintereinander läsen sich ohnehin
+  // wie ein Fehler.
+  if (await writeTriggerConfigs({ force: true })) {
+    notify(t("msg.buttonsDefault"));
+  }
+});
+
+function applyButtonDefaults() {
+  Object.entries(BUTTON_DEFAULTS).forEach(([key, preset]) => {
+    setRange(`${key}-threshold`, preset.threshold);
+    byId(`${key}-enabled`).checked = preset.enabled;
+
+    // Über GATT gibt es das Auslöseverhalten nicht. Die Regler dort auf
+    // etwas zu stellen, das nie hinübergeht, hiesse einen Stand anzeigen,
+    // den das Gerät nicht hat.
+    if (!mouse.triggerControl) return;
+
+    setRange(`${key}-press-delta`, preset.threshold);
+    setRange(`${key}-release-delta`, preset.threshold);
+    showSimpleFromFields(key);
+    showTriggerMode(key, TRIGGER_MODE.relative);
+  });
+
+  showActiveSensors();
+}
 
 // „Laden“ holt den Stand des Geräts zurück - und der besteht aus zwei
 // Antworten. Die Schwellwerte kommen mit der Tastenkonfiguration, die

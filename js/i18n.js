@@ -97,6 +97,13 @@ const TEXTS = {
     "acc.buttons.sub": "Enable and thresholds",
     "buttons.legend": "FOUR SENSORS \u00b7 THRESHOLD 0 \u2013 127",
     "buttons.load": "Load",
+    "buttons.default": "Back to default",
+    "buttons.defaultConfirm": "Reset every button sensor to the factory "
+      + "settings?\n\nLeft Force 25, active \u00b7 Left Hall 10\nRight Force 15, "
+      + "active \u00b7 Right Hall 10\nAll four on a relative threshold\n\nBoth the "
+      + "fixed and the relative threshold are set to those values. Press and "
+      + "release sensitivity follow; the deadzone stays as it is. This is "
+      + "written to the mouse straight away.",
     "buttons.write": "Write to mouse",
     "buttons.colSensor": "Sensor",
     "buttons.colMode": "Threshold mode",
@@ -241,6 +248,7 @@ const TEXTS = {
     "msg.motionOn": "Motion light switched on",
     "msg.dpiSet": "Resolution set to {dpi} DPI",
     "msg.buttonsLoaded": "Button settings loaded",
+    "msg.buttonsDefault": "Button sensors reset to default",
     "msg.triggerFailed": "{sensor}: trigger setting not written \u2013 {error}",
     "msg.triggerUnreadable": "{sensor}: trigger setting not readable \u2013 "
       + "{error}",
@@ -362,8 +370,13 @@ const TEXTS = {
     "acc.buttons.title": "Tastensensorik",
     "acc.buttons.sub": "Freigabe und Schwellwerte",
     "buttons.legend": "VIER SENSOREN \u00b7 SCHWELLWERT 0 \u2013 127",
-    "buttons.load": "Laden",
-    "buttons.write": "In die Maus schreiben",
+    "buttons.load": "Laden",    "buttons.default": "Auf Standard",
+    "buttons.defaultConfirm": "Alle Tastensensoren auf die Werkseinstellung "
+      + "zur\u00fccksetzen?\n\nLinks Force 25, aktiv \u00b7 Links Hall 10\nRechts Force "
+      + "15, aktiv \u00b7 Rechts Hall 10\nAlle vier auf relative Schwelle\n\nDie "
+      + "feste und die relative Schwelle bekommen beide diese Werte. "
+      + "Ansprechen und Loslassen folgen ihnen; die Totzone bleibt, wie sie "
+      + "ist. Geschrieben wird sofort in die Maus.",    "buttons.write": "In die Maus schreiben",
     "buttons.colSensor": "Sensor",
     "buttons.colMode": "Schwellenart",
     "buttons.colThreshold": "Schwelle",
@@ -515,6 +528,7 @@ const TEXTS = {
     "msg.motionOn": "Bewegungslicht eingeschaltet",
     "msg.dpiSet": "Aufl\u00f6sung auf {dpi} DPI gesetzt",
     "msg.buttonsLoaded": "Tasteneinstellungen geladen",
+    "msg.buttonsDefault": "Tastensensoren auf Standard zur\u00fcckgesetzt",
     "msg.triggerFailed": "{sensor}: Ausl\u00f6severhalten nicht geschrieben \u2013 "
       + "{error}",
     "msg.triggerUnreadable": "{sensor}: Ausl\u00f6severhalten nicht lesbar \u2013 "
