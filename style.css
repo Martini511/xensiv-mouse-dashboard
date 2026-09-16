@@ -676,26 +676,46 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .trigger-params label input { grid-column: 1 / -1; }
 .trigger-params output { font: 500 11px "IBM Plex Mono", monospace; }
 
-/* Zugeklappt und am Ende: Wer nur eine Empfindlichkeit sucht, findet sie
-   oben in der Zeile und muss hier gar nicht hinsehen. */
-.trigger-advanced { margin-top: 18px; border: 1px solid var(--line); }
+/* Zugeklappt soll das hier nach Fussnote aussehen, nicht nach Abschnitt: kein
+   Rahmen, keine Fuellung, nur eine kleine graue Zeile mit einem Winkel davor.
+   Ein Kasten mit Kopfleiste stand optisch neben der Sensorliste und lud damit
+   gerade die ein, die ihn nicht brauchen. */
+.trigger-advanced { margin-top: 22px; }
 .trigger-advanced > summary {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 14px 20px;
-  background: #fbfcfc;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--muted);
   cursor: pointer;
-  font: 500 11px "IBM Plex Mono", monospace;
+  font: 500 10px "IBM Plex Mono", monospace;
+  letter-spacing: .08em;
   text-transform: uppercase;
+  opacity: .6;
+  list-style: none;
+  transition: opacity .15s ease, color .15s ease;
 }
-.trigger-advanced > summary:hover { color: var(--ink); }
-.trigger-advanced > summary small { font-size: 10px; text-transform: none; letter-spacing: .02em; }
-.trigger-advanced[open] > summary { border-bottom: 1px solid var(--line); }
-.trigger-advanced > .hint { margin: 0; padding: 0 20px 18px; }
+.trigger-advanced > summary::-webkit-details-marker { display: none; }
+.trigger-advanced > summary:hover { color: var(--ink); opacity: 1; }
+.trigger-advanced > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-.advanced-list { padding: 4px 20px 18px; }
+/* Derselbe Winkel wie an den Aufklappern darueber, nur kleiner - damit man
+   ihn wiedererkennt, ohne dass er sich meldet. */
+.trigger-advanced > summary::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform .2s;
+}
+.trigger-advanced[open] > summary { opacity: 1; margin-bottom: 4px; }
+.trigger-advanced[open] > summary::before { transform: rotate(45deg); }
+.trigger-advanced > .hint { margin-top: 14px; }
+
+/* Aufgeklappt braucht es wieder Halt - aber eine Linie an der Seite genuegt
+   dafuer, wo vorher ein ganzer Kasten stand. */
+.advanced-list { margin-top: 12px; border-left: 1px solid var(--line); padding: 2px 0 2px 18px; }
 .advanced-sensor + .advanced-sensor { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
 .advanced-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
 .advanced-head > span { font-weight: 700; font-size: 13px; }
@@ -811,7 +831,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
      statt neben ihm um denselben Platz zu streiten. */
   .sensor-row .mode-switch { grid-column: 1 / -1; }
   .trigger-params { grid-template-columns: 1fr; }
-  .advanced-list, .trigger-advanced > summary, .trigger-advanced > .hint { padding-inline: 16px; }
+  .advanced-list { padding-left: 12px; }
   .sensor-header { display: none; }
   .toolbar { align-items: flex-start; flex-direction: column; }
   .calibration-actions { flex-wrap: wrap; }
