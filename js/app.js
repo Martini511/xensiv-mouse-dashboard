@@ -584,10 +584,11 @@ async function loadTriggerConfig(key) {
 // abzufragen und viermal dasselbe zu melden.
 async function loadTriggerConfigs() {
   for (const key of SHOWN_SENSORS) {
-    if (!await loadTriggerConfig(key)) return;
+    if (!await loadTriggerConfig(key)) return false;
   }
 
   await loadTriggerStates();
+  return true;
 }
 
 // Einmal nach dem Verbinden, damit die Linien auch dort stehen, wo gerade
@@ -1403,9 +1404,24 @@ function previewDpi() {
 
 // ─── Tastensensorik ───────────────────────────────────
 
-byId("load-buttons").addEventListener("click", () => run(async () => {
-  populateButtonConfig(await mouse.readButtonConfig());
-}, t("msg.buttonsLoaded")));
+// „Laden“ holt den Stand des Geräts zurück - und der besteht aus zwei
+// Antworten. Die Schwellwerte kommen mit der Tastenkonfiguration, die
+// Schwellenart und ihre Empfindlichkeit aus einer eigenen, je Kanal. Nur die
+// erste zu holen liess die Regler der relativen Schwelle stehen, wo die Seite
+// sie zuletzt hatte: Wer daneben etwas verstellt hatte, bekam beim Laden
+// seinen eigenen alten Stand zurueck statt den der Maus.
+byId("load-buttons").addEventListener("click", async () => {
+  try {
+    populateButtonConfig(await mouse.readButtonConfig());
+  } catch (error) {
+    showError(error);
+    return;
+  }
+
+  // Scheitert der zweite Teil, hat er das schon gemeldet. Eine Erfolgsmeldung
+  // darueber wuerde sie zudecken und das Gegenteil behaupten.
+  if (await loadTriggerConfigs()) notify(t("msg.buttonsLoaded"));
+});
 
 byId("save-buttons").addEventListener("click", () => {
   const config = readButtonConfig();
