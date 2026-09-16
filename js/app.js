@@ -9,6 +9,7 @@ import {
   TRIGGER_MODE,
   channelOf,
   sensorLabel,
+  trackTrigger,
 } from "./protocol.js";
 import { LANGUAGES, language, onLanguage, setLanguage, t, translate }
   from "./i18n.js";
@@ -38,6 +39,13 @@ const toast = byId("toast");
 // befragt, verdrängt die Eingabemeldungen – die Tasten wirken dann
 // systemweit tot. Deshalb bleibt der Kanal zur Hälfte frei.
 const PRESSURE_INTERVAL = 100;
+
+// Ruht die Hand, geht es langsamer: Der Durchlauf besteht dann nur noch aus
+// der Radabfrage, und weil sich die Schleife nach jeder Anfrage ebenso lange
+// geduldet, wie sie gearbeitet hat, verdoppelt das die Rate.
+const PRESSURE_IDLE_INTERVAL = 200;
+const REST_TOLERANCE = 1;
+
 const DUTY_LIMIT = 0.5;
 const MIN_IDLE = 5;
 
@@ -241,13 +249,12 @@ mouse.addEventListener("disconnected", ({ detail }) => {
   updateSleepAvailability();
 
   // Dasselbe gilt fürs Auslöseverhalten. Die Regler behalten ihre Stellung -
-  // sie zeigt, was zuletzt im Gerät stand -, aber gemessene Zustände gibt es
-  // ab hier keine mehr, und die Marken fallen auf die feste Schwelle
-  // zurück. Dass die Firmware den Befehl kennt, wird beim nächsten Verbinden
-  // neu erprobt.
+  // sie zeigt, was zuletzt im Gerät stand -, aber ohne Einstellung aus dem
+  // Gerät gibt es nichts nachzurechnen, und die Marken fallen auf die feste
+  // Schwelle zurück.
   triggerConfigs.clear();
   triggerStates.clear();
-  triggerStateAvailable = true;
+  lastPressure = null;
   updateTriggerAvailability();
 
   // Die Seite steht ab hier bereit fuer eine neue Verbindung, nicht fuer
@@ -476,18 +483,11 @@ function updateSleepAvailability() {
 // ist. Der Unterschied zählt: Nach einem Schreibvorgang wird nachgefragt, und
 // erst diese Antwort landet hier.
 const triggerConfigs = new Map();
+
+// Der nachgerechnete Zustand je Kanal, fortgeschrieben aus dem Druckstrom.
+// Er kam einmal aus dem Gerät; das kostete eine eigene Anfrage je Durchlauf
+// und damit ein Drittel der Abtastrate.
 const triggerStates = new Map();
-
-// So schnell, wie der Lastdeckel es zulässt. Ein kleinerer Wert brächte
-// nichts: Die Schleife kommt über die Funkstrecke ohnehin nur auf wenige
-// Durchläufe je Sekunde, und mehr als einen Kanal je Durchlauf zu holen ginge
-// auf Kosten genau der Reserve, die die Tasten der Maus durchlässt.
-const TRIGGER_INTERVAL = 50;
-
-// Fragt die Firmware den Zustand nicht her, wird nicht weiter gefragt. Sonst
-// liefe die Live-Schleife bei jedem Durchlauf in denselben Fehler.
-let triggerStateAvailable = true;
-let triggerCursor = 0;
 
 const triggerBlocks = [...document.querySelectorAll("[data-sensor]")];
 
@@ -607,67 +607,21 @@ async function loadTriggerConfigs() {
     if (!await loadTriggerConfig(key)) return false;
   }
 
-  await loadTriggerStates();
   return true;
 }
 
-// Einmal nach dem Verbinden, damit die Linien auch dort stehen, wo gerade
-// nichts laufend abgefragt wird – in der festen Betriebsart bewegen sie sich
-// ohnehin nicht.
-async function loadTriggerStates() {
-  for (const key of SHOWN_SENSORS) {
-    if (!await readTriggerStateInto(key)) return;
-  }
-}
+// Der Zustand wird mit jedem Druckwert fortgeschrieben, der ohnehin
+// hereinkommt. Ohne Einstellung aus dem Gerät gibt es nichts nachzurechnen,
+// und bei fester Schwelle nichts nachzurechnen, was wandert.
+function updateTriggerState(key, value) {
+  const config = triggerConfigs.get(key);
 
-async function readTriggerStateInto(key) {
-  if (!mouse.triggerControl || !mouse.connected || !triggerStateAvailable) {
-    return false;
+  if (!config || config.mode !== TRIGGER_MODE.relative) {
+    triggerStates.delete(key);
+    return;
   }
 
-  try {
-    triggerStates.set(key, await mouse.readTriggerState(channelOf(key)));
-    return true;
-  } catch (error) {
-    // Ist die Verbindung fort, gehört der Fehler nach oben: Die Live-Schleife
-    // hält daran an. Kennt die Firmware den Befehl bloß nicht, ist das kein
-    // Grund aufzuhören – die Balken zeigen dann wieder die feste Schwelle.
-    if (!mouse.connected) throw error;
-
-    triggerStateAvailable = false;
-    triggerStates.clear();
-    return false;
-  }
-}
-
-// Laufend gelesen wird nur, was sich auch bewegt: die relative Schwelle. Die
-// feste steht, und wo sie steht, weiss die Seite ohnehin - dort waere jede
-// Abfrage verschenkt.
-//
-// Die Sensoren, die je Taste tatsächlich messen, stehen zweimal in der Runde
-// und kommen damit doppelt so oft an die Reihe: An ihnen wird eingestellt.
-// Die übrigen bleiben trotzdem darin. Sie ganz auszulassen käme billiger,
-// hinterließe aber eine Linie, die stehen bleibt, während sich der Wert
-// darunter bewegt - und das wäre keine sparsame Anzeige, sondern eine
-// falsche. Die Kosten bleiben ohnehin gleich: Geholt wird ein Kanal je
-// Durchlauf, wie viele auch in der Runde stehen.
-function liveTriggerKeys() {
-  const active = [activeSensor("left"), activeSensor("right")];
-
-  return SHOWN_SENSORS
-    .filter(relativeMode)
-    .flatMap((key) => (active.includes(key) ? [key, key] : [key]));
-}
-
-async function pollTriggerState() {
-  if (!triggerStateAvailable) return;
-
-  const keys = liveTriggerKeys();
-  if (keys.length === 0) return;
-
-  const key = keys[triggerCursor % keys.length];
-  triggerCursor += 1;
-  await readTriggerStateInto(key);
+  triggerStates.set(key, trackTrigger(triggerStates.get(key), value, config));
 }
 
 function showTriggerConfig(key, config) {
@@ -822,7 +776,6 @@ function trackWheelRate() {
 
 async function monitorLoop() {
   let nextPressure = 0;
-  let nextTrigger = 0;
 
   while (monitoring && mouse.connected) {
     const startedAt = Date.now();
@@ -831,21 +784,19 @@ async function monitorLoop() {
       // Die Radwerte speisen die Diagramme und werden bei jedem Durchlauf
       // geholt. Schneller als die Funkstrecke geht ohnehin nicht, und der
       // Lastdeckel weiter unten hält den Kanal frei. Der Tastendruck folgt
-      // danach mit seiner eigenen, festen Frist.
+      // danach mit seiner eigenen Frist.
       showWheel(await mouse.readWheelValues());
 
       if (Date.now() >= nextPressure) {
-        showPressure(await mouse.readButtonPressure());
-        nextPressure = Date.now() + PRESSURE_INTERVAL;
-      }
+        const sample = await mouse.readButtonPressure();
+        showPressure(sample);
 
-      // Der Auslösezustand kommt je Kanal einzeln herein und deshalb reihum,
-      // einer je Durchlauf. Alle auf einmal zu holen kostete so viele
-      // Anfragen, wie es Kanäle gibt - und der Kanal soll zur Hälfte frei
-      // bleiben, damit die Tasten der Maus durchkommen.
-      if (Date.now() >= nextTrigger) {
-        await pollTriggerState();
-        nextTrigger = Date.now() + TRIGGER_INTERVAL;
+        // Ruht die Hand, wird seltener gefragt - und der Durchlauf besteht
+        // dann nur noch aus der Radabfrage. Weil die Schleife sich nach
+        // jeder Anfrage ebenso lange geduldet, wie sie gearbeitet hat,
+        // verdoppelt das die Rate, solange nichts zu sehen ist.
+        nextPressure = Date.now()
+          + (atRest(sample) ? PRESSURE_IDLE_INTERVAL : PRESSURE_INTERVAL);
       }
     } catch (error) {
       stopMonitoring();
@@ -864,6 +815,26 @@ async function monitorLoop() {
   }
 
   stopMonitoring();
+}
+
+// Ruhe heisst: kein Wert, der sich merklich bewegt, und keine Taste, die
+// gedrueckt gilt. Ein Zaehlschritt Spiel muss sein - ein Sensor rauscht, und
+// auf genaue Gleichheit zu warten hiesse, nie zur Ruhe zu kommen.
+//
+// Gegen die Schwelle wird ausdruecklich nicht geprueft: Sie ist bei manchen
+// Kanaelen null, und dann laege kein Messwert je darunter - die Ruhe traete
+// nie ein.
+let lastPressure = null;
+
+function atRest(values) {
+  const previous = lastPressure;
+  lastPressure = values;
+
+  if (!previous) return false;
+
+  return SHOWN_SENSORS.every((key) =>
+    Math.abs(values[key] - previous[key]) <= REST_TOLERANCE
+    && !triggerStates.get(key)?.pressed);
 }
 
 // Der Zustand wird als Schluessel gefuehrt, nicht als fertiger Text: Beim
@@ -1098,6 +1069,10 @@ function showPressure(values) {
   // Die Skala zuerst nachziehen, sonst bezoegen sich die Balken eines
   // Durchlaufs auf zwei verschiedene Bezugsgroessen.
   pressScale = Math.max(pressScale, ...SHOWN_SENSORS.map((key) => values[key]));
+
+  // Erst alle Zustaende fortschreiben, dann zeichnen: Die Marken einer Zeile
+  // und der Tastendruck daneben sollen aus demselben Messwert stammen.
+  SHOWN_SENSORS.forEach((key) => updateTriggerState(key, values[key]));
 
   const active = {
     left: activeSensor("left"),

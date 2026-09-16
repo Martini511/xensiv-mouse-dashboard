@@ -3,7 +3,6 @@ import {
   decodeButtonPressure,
   decodeCalibration,
   decodeTriggerConfig,
-  decodeTriggerState,
   decodeWheelValues,
   encodeButtonConfig,
   encodeCalibration,
@@ -40,7 +39,6 @@ const COMMAND = Object.freeze({
   setKeepAwake: 13,
   setTriggerConfig: 14,
   getTriggerConfig: 15,
-  getTriggerState: 16,
 });
 
 const STATUS_MESSAGES = [
@@ -358,9 +356,10 @@ export class XensivMouseHid extends EventTarget {
 
   // ─── Auslöseverhalten ────────────────────────────────
   //
-  // Einstellung und Zustand gehen getrennte Wege: Die Einstellung liegt im
-  // Flash und wird selten geschrieben, der Zustand ist ein Messwert und wird
-  // oft gelesen. Beides je Kanal.
+  // Nur die Einstellung, je Kanal - sie liegt im Flash und wird selten
+  // angefasst. Der laufende Zustand kaeme aus Befehl 16; geholt wird er
+  // nicht mehr, weil jede Anfrage in der Live-Schleife doppelt zu Buche
+  // schlaegt. Die Seite rechnet ihn stattdessen aus dem Druckstrom nach.
 
   // Schreibt in den Flash. Deshalb am Ende einer Schiebebewegung aufrufen,
   // nicht bei jedem Zwischenschritt: Ein Schieberegler liefert waehrend des
@@ -373,11 +372,6 @@ export class XensivMouseHid extends EventTarget {
   async readTriggerConfig(channel) {
     return decodeTriggerConfig(
       await this.command(COMMAND.getTriggerConfig, Uint8Array.of(channel)));
-  }
-
-  async readTriggerState(channel) {
-    return decodeTriggerState(
-      await this.command(COMMAND.getTriggerState, Uint8Array.of(channel)));
   }
 
   // ─── Übertragung ────────────────────────────────────

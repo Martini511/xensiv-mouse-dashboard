@@ -160,18 +160,53 @@ export function decodeTriggerConfig(value) {
   };
 }
 
-// `pressPoint` und `releasePoint` sind die Linien, die gerade gelten - in der
-// festen Betriebsart stehen sie, in der schnellen wandern sie. Gezeichnet
-// werden sie deshalb in beiden Fällen gleich.
-export function decodeTriggerState(value) {
-  requireLength(value, 6, t("trigger.title"));
+// Dasselbe Nachführen, das die Firmware betreibt - hier noch einmal, aus dem
+// Druckstrom, der ohnehin ankommt.
+//
+// Das Gerät könnte beides selbst melden, und es tat es auch. Nur kostete das
+// eine dritte Anfrage je Durchlauf, und weil die Schleife sich nach jeder
+// Anfrage ebenso lange gedulden muss, wie sie gearbeitet hat, sank die
+// Abtastrate um ein Drittel. Gerechnet wird deshalb hier.
+//
+// Der Preis steht in derselben Rechnung: Die Firmware sieht ihr Signal
+// ungleich öfter als diese Seite. Was zwischen zwei Abtastungen an Spitze
+// oder Tal liegt, entgeht der Nachbildung - bei einem schnellen Klick also
+// gerade das, worauf es ankommt. Die Linien zeigen damit, wo bei dieser
+// Abtastrate geschaltet würde, nicht mehr, wo das Gerät es tatsächlich tut.
+export function trackTrigger(previous, value, config) {
+  const { pressDelta, releaseDelta, deadzone } = config;
+
+  let { pressed, peak, valley } =
+    previous ?? { pressed: false, peak: value, valley: value };
+
+  // Nahe der Ruhelage gilt die Taste als losgelassen, und die Verfolgung
+  // beginnt von vorn: Sonst hielte ein abgesunkenes Tal den Auslösepunkt
+  // unter dem Rauschen fest, und die Taste klickte von selbst.
+  if (value <= deadzone) {
+    pressed = false;
+    peak = value;
+    valley = value;
+  } else if (pressed) {
+    peak = Math.max(peak, value);
+    if (value <= peak - releaseDelta) {
+      pressed = false;
+      valley = value;
+    }
+  } else {
+    valley = Math.min(valley, value);
+    if (value >= valley + pressDelta) {
+      pressed = true;
+      peak = value;
+    }
+  }
+
   return {
-    value: value.getUint8(0),
-    peak: value.getUint8(1),
-    valley: value.getUint8(2),
-    pressPoint: value.getUint8(3),
-    releasePoint: value.getUint8(4),
-    pressed: Boolean(value.getUint8(5)),
+    value,
+    peak,
+    valley,
+    pressed,
+    pressPoint: Math.max(0, valley + pressDelta),
+    releasePoint: Math.max(0, peak - releaseDelta),
   };
 }
 
