@@ -647,7 +647,14 @@ const RELEASE_RATIO = 1.15;
 
 function coupledRelease(key, press) {
   const input = byId(`${key}-release-delta`);
-  return Math.min(Number(input.max), Math.round(press * RELEASE_RATIO));
+  return clampToRange(input, Math.round(press * RELEASE_RATIO));
+}
+
+// Die Grenzen stehen im Markup, nicht hier: Der Regler kennt sie ohnehin und
+// beschneidet seinen Wert selbst. Wer davor rechnet, muss dasselbe tun -
+// sonst verglichen sich gleich gemeinte Werte als verschieden.
+function clampToRange(input, value) {
+  return Math.min(Number(input.max), Math.max(Number(input.min), value));
 }
 
 // Der Regler der Zeile zeigt das Ansprechen. Weicht das Loslassen von dem ab,

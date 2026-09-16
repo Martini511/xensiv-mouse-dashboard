@@ -95,7 +95,7 @@ const TEXTS = {
 
     "acc.buttons.title": "Button sensors",
     "acc.buttons.sub": "Enable and thresholds",
-    "buttons.legend": "FOUR SENSORS \u00b7 THRESHOLD 0 \u2013 127",
+    "buttons.legend": "FOUR SENSORS \u00b7 THRESHOLD 5 \u2013 127",
     "buttons.load": "Load",
     "buttons.default": "Back to default",
     "buttons.defaultConfirm": "Reset every button sensor to the factory "
@@ -371,7 +371,7 @@ const TEXTS = {
 
     "acc.buttons.title": "Tastensensorik",
     "acc.buttons.sub": "Freigabe und Schwellwerte",
-    "buttons.legend": "VIER SENSOREN \u00b7 SCHWELLWERT 0 \u2013 127",
+    "buttons.legend": "VIER SENSOREN \u00b7 SCHWELLE 5 \u2013 127",
     "buttons.load": "Laden",    "buttons.default": "Auf Standard",
     "buttons.defaultConfirm": "Alle Tastensensoren auf die Werkseinstellung "
       + "zur\u00fccksetzen?\n\nLinks Force 25, aktiv \u00b7 Links Hall 10\nRechts Force "
