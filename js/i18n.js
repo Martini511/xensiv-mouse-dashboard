@@ -130,8 +130,11 @@ const TEXTS = {
       + "point and fires again once you push back in by it, so a repeat click "
       + "needs no return past a fixed point. Lower means more sensitive. Both "
       + "modes keep their own values in the mouse, so switching back and forth "
-      + "loses nothing. The two marker lines on the live pressure bars show "
-      + "where the device is actually switching.",
+      + "loses nothing. Like the thresholds, these settings reach the device "
+      + "only with \u201cWrite to mouse\u201d \u2013 \u201cLoad\u201d discards them. The two "
+      + "marker lines on the live pressure bars show where the device is "
+      + "actually switching, so they follow a change once it has been "
+      + "written.",
     "trigger.advancedHint": "Press and release sensitivity may differ \u2013 a "
       + "lower release value lets the button drop out sooner than it fires. "
       + "The row above then shows the press value and a mark that the two have "
@@ -396,9 +399,11 @@ const TEXTS = {
       + "ihn nachdr\u00fcckt \u2013 ein erneuter Klick braucht damit keinen Weg "
       + "zur\u00fcck \u00fcber einen festen Punkt. Kleiner hei\u00dft empfindlicher. Beide "
       + "Arten behalten ihre eigenen Werte in der Maus; hin und her zu "
-      + "schalten verliert also nichts. Die beiden Marken auf den "
-      + "Druckbalken der Live-Ansicht zeigen, wo das Ger\u00e4t tats\u00e4chlich "
-      + "schaltet.",
+      + "schalten verliert also nichts. Wie die Schwellwerte gehen diese "
+      + "Einstellungen erst mit \u201eIn die Maus schreiben\u201c hin\u00fcber \u2013 "
+      + "\u201eLaden\u201c verwirft sie. Die beiden Marken auf den Druckbalken der "
+      + "Live-Ansicht zeigen, wo das Ger\u00e4t tats\u00e4chlich schaltet; sie folgen "
+      + "einer \u00c4nderung also erst, wenn sie geschrieben ist.",
     "trigger.advancedHint": "Ansprechen und Loslassen d\u00fcrfen auseinander "
       + "liegen \u2013 ein kleinerer Wert f\u00fcrs Loslassen l\u00e4sst die Taste fr\u00fcher "
       + "abfallen, als sie ausl\u00f6st. Die Zeile oben zeigt dann den Wert f\u00fcrs "

@@ -491,20 +491,19 @@ let triggerCursor = 0;
 
 const triggerBlocks = [...document.querySelectorAll("[data-sensor]")];
 
+// Alles hier drin ist eine Aenderung an der Seite, nicht am Geraet. In die
+// Maus geht sie erst mit "In die Maus schreiben" - wie die Schwellwerte und
+// die Freigabe daneben. Sofort zu schreiben waere bequemer, nahm aber
+// "Laden" seinen Sinn: Zu verwerfen gab es dann nichts mehr, weil schon
+// geschrieben war.
 triggerBlocks.forEach((block) => {
   const key = block.dataset.sensor;
 
   block.querySelectorAll(".mode-switch button").forEach((button) => {
     button.addEventListener("click", () => {
-      const mode = button.dataset.mode === "relative"
+      showTriggerMode(key, button.dataset.mode === "relative"
         ? TRIGGER_MODE.relative
-        : TRIGGER_MODE.fixed;
-
-      // Schon die gewählte Betriebsart: Dann gibt es nichts zu schreiben.
-      // Ein Schreibvorgang in den Flash für einen Klick ohne Wirkung wäre
-      // Verschleiß ohne Gegenwert.
-      if (triggerConfigs.get(key)?.mode === mode) return;
-      writeTriggerConfig(key, { mode });
+        : TRIGGER_MODE.fixed);
     });
   });
 
@@ -512,18 +511,10 @@ triggerBlocks.forEach((block) => {
   // Sinn der Zusammenfassung. Wer sie auseinanderziehen will, tut das unten.
   const simple = byId(`${key}-relative`);
   simple.addEventListener("input", () => mirrorSimpleToFields(key));
-  simple.addEventListener("change", () => {
-    const value = Number(simple.value);
-    writeTriggerConfig(key, { pressDelta: value, releaseDelta: value });
-  });
 
-  // `change`, nicht `input`: Geschrieben wird erst, wenn der Regler
-  // losgelassen ist. Während des Ziehens liefert er Dutzende Zwischenwerte,
-  // und jeder davon ginge in den Flash.
   ["press-delta", "release-delta", "deadzone"].forEach((field) => {
-    const input = byId(`${key}-${field}`);
-    input.addEventListener("input", () => showSimpleFromFields(key));
-    input.addEventListener("change", () => writeTriggerConfig(key, {}));
+    byId(`${key}-${field}`)
+      .addEventListener("input", () => showSimpleFromFields(key));
   });
 });
 
@@ -535,10 +526,10 @@ function advancedGroup(key) {
   return document.querySelector(`[data-advanced="${key}"]`);
 }
 
-async function writeTriggerConfig(key, changes) {
-  if (!mouse.triggerControl || !mouse.connected) return;
+async function writeTriggerConfig(key) {
+  if (!mouse.triggerControl || !mouse.connected) return true;
 
-  const config = { ...readTriggerFields(key), ...changes };
+  const config = readTriggerFields(key);
 
   try {
     await mouse.writeTriggerConfig(channelOf(key), config);
@@ -546,20 +537,49 @@ async function writeTriggerConfig(key, changes) {
     // Nachfragen statt glauben: Die Firmware legt die Werte im Flash ab und
     // darf sie dabei zurechtstutzen. Angezeigt wird, was dort steht.
     showTriggerConfig(key, await mouse.readTriggerConfig(channelOf(key)));
+    return true;
   } catch (error) {
     showError(new Error(t("msg.triggerFailed",
       { sensor: sensorLabel(key), error: error.message })));
 
     // Die Anzeige folgt dem Gerät, nicht dem gescheiterten Wunsch.
     await loadTriggerConfig(key);
+    return false;
   }
 }
 
-// Die Betriebsart steht nicht in den Reglern, sondern in dem, was das Gerät
-// zuletzt gemeldet hat. Ohne Meldung gilt die Werkseinstellung.
+// Geschrieben wird nur, was sich geändert hat. Die Werte liegen im Flash,
+// und vier unveränderte Kanäle bei jedem Druck auf „Schreiben“ wären
+// Verschleiß ohne Gegenwert.
+async function writeTriggerConfigs() {
+  for (const key of SHOWN_SENSORS) {
+    if (!triggerChanged(key)) continue;
+    if (!await writeTriggerConfig(key)) return false;
+  }
+
+  return true;
+}
+
+function triggerChanged(key) {
+  const device = triggerConfigs.get(key);
+  if (!device) return false;
+
+  const edited = readTriggerFields(key);
+  return device.mode !== edited.mode
+    || device.pressDelta !== edited.pressDelta
+    || device.releaseDelta !== edited.releaseDelta
+    || device.deadzone !== edited.deadzone;
+}
+
+// Die Schwellenart steht in den Schaltflächen, nicht mehr in dem, was das
+// Gerät gemeldet hat: Sie ist jetzt eine Änderung wie jede andere und wartet
+// mit den übrigen auf das Schreiben.
 function readTriggerFields(key) {
+  const chosen = triggerBlock(key)
+    .querySelector(".mode-switch button.is-active")?.dataset.mode;
+
   return {
-    mode: triggerConfigs.get(key)?.mode ?? TRIGGER_MODE.relative,
+    mode: chosen === "relative" ? TRIGGER_MODE.relative : TRIGGER_MODE.fixed,
     pressDelta: numberValue(`${key}-press-delta`),
     releaseDelta: numberValue(`${key}-release-delta`),
     deadzone: numberValue(`${key}-deadzone`),
@@ -1423,17 +1443,25 @@ byId("load-buttons").addEventListener("click", async () => {
   if (await loadTriggerConfigs()) notify(t("msg.buttonsLoaded"));
 });
 
-byId("save-buttons").addEventListener("click", () => {
+byId("save-buttons").addEventListener("click", async () => {
   const config = readButtonConfig();
   if (!confirmButtonConfig(config)) return;
 
-  run(async () => {
+  try {
     await mouse.writeButtonConfig(config);
     // Ab jetzt steht das im Gerät. Beim Lesen erfährt man es nicht wieder,
     // deshalb diese Notiz - sie ist die einzige Auskunft darüber, welcher
     // Sensor dort tatsächlich misst.
     rememberWritten(config);
-  }, t("msg.buttonsSaved"));
+  } catch (error) {
+    showError(error);
+    return;
+  }
+
+  // Die Schwellenart und ihre Empfindlichkeit gehen im selben Zug hinüber:
+  // Zwei Schaltflächen für zwei Hälften derselben Einstellung wären eine
+  // Unterscheidung, die nur das Protokoll kennt.
+  if (await writeTriggerConfigs()) notify(t("msg.buttonsSaved"));
 });
 
 // Eine zu hohe Schwelle oder ein abgeschalteter Sensor macht die Taste
