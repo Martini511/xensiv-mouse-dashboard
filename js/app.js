@@ -639,9 +639,20 @@ function showTriggerConfig(key, config) {
   showTriggerMode(key, config.mode);
 }
 
-// Der Regler der Zeile zeigt das Ansprechen. Gehen Ansprechen und Loslassen
-// auseinander, sagt die Marke daneben es - sonst stuende dort eine Zahl, die
-// nur die halbe Einstellung meint, und niemand saehe den Unterschied.
+// Der eine Regler der Zeile stellt beide Werte, aber nicht auf dasselbe: Das
+// Loslassen liegt 15 Prozent ueber dem Ansprechen. Ein Finger, der auf dem
+// Auslesepunkt zittert, laesst damit nicht bei jeder Schwankung los - genau
+// gleiche Werte machten aus dem Rauschen ein Flattern.
+const RELEASE_RATIO = 1.15;
+
+function coupledRelease(key, press) {
+  const input = byId(`${key}-release-delta`);
+  return Math.min(Number(input.max), Math.round(press * RELEASE_RATIO));
+}
+
+// Der Regler der Zeile zeigt das Ansprechen. Weicht das Loslassen von dem ab,
+// was aus ihm folgt, sagt die Marke daneben es - sonst stuende dort eine
+// Zahl, die nur die halbe Einstellung meint, und niemand saehe es.
 function showSimpleFromFields(key) {
   const press = numberValue(`${key}-press-delta`);
   const release = numberValue(`${key}-release-delta`);
@@ -649,7 +660,7 @@ function showSimpleFromFields(key) {
   setRange(`${key}-relative`, press);
 
   const mark = byId(`${key}-split`);
-  mark.hidden = press === release;
+  mark.hidden = release === coupledRelease(key, press);
   mark.textContent = `\u2260 ${release}`;
 
   // Kein `data-i18n-title`: Der Sprachwechsel setzt solche Hinweise stumpf
@@ -663,11 +674,11 @@ function showSimpleFromFields(key) {
 // Werte folgen ihm, damit die erweiterten Regler nicht das Gestrige zeigen,
 // wenn man sie gleich darauf aufklappt.
 function mirrorSimpleToFields(key) {
-  const value = numberValue(`${key}-relative`);
+  const press = numberValue(`${key}-relative`);
 
-  setRange(`${key}-press-delta`, value);
-  setRange(`${key}-release-delta`, value);
-  byId(`${key}-split`).hidden = true;
+  setRange(`${key}-press-delta`, press);
+  setRange(`${key}-release-delta`, coupledRelease(key, press));
+  showSimpleFromFields(key);
 }
 
 // Die Anzeige neben dem Regler hängt am `input`-Ereignis, und das bleibt aus,
@@ -1450,9 +1461,12 @@ function applyButtonDefaults() {
     // den das Gerät nicht hat.
     if (!mouse.triggerControl) return;
 
-    setRange(`${key}-press-delta`, preset.threshold);
-    setRange(`${key}-release-delta`, preset.threshold);
-    showSimpleFromFields(key);
+    // Über den einfachen Regler, nicht an ihm vorbei: So gilt auch für den
+    // Auslieferungsstand der Abstand zwischen Ansprechen und Loslassen, und
+    // die Zeile zeigt hinterher keine Marke für eine Abweichung, die niemand
+    // vorgenommen hat.
+    setRange(`${key}-relative`, preset.threshold);
+    mirrorSimpleToFields(key);
     showTriggerMode(key, TRIGGER_MODE.relative);
   });
 

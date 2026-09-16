@@ -121,9 +121,9 @@ const TEXTS = {
     "trigger.deadzone": "Deadzone",
     "trigger.advanced": "Advanced settings",
     "trigger.advancedSub": "Press and release separately, plus deadzone",
-    "trigger.split": "Press and release have been set apart: press {press}, "
-      + "release {release}. The slider shows the press value. Moving it ties "
-      + "the two back together.",
+    "trigger.split": "Release no longer follows the slider: press {press}, "
+      + "release {release}. Normally release sits 15\u00a0% above press. The slider "
+      + "shows the press value; moving it restores the pairing.",
     "trigger.inactive": "Fixed threshold selected \u2013 stored, but not in effect",
     "trigger.needsConnection": "Connect the mouse first. The threshold mode is "
       + "read from the device, not remembered by this page.",
@@ -142,13 +142,15 @@ const TEXTS = {
       + "marker lines on the live pressure bars show where the device is "
       + "actually switching, so they follow a change once it has been "
       + "written.",
-    "trigger.advancedHint": "Press and release sensitivity may differ \u2013 a "
-      + "lower release value lets the button drop out sooner than it fires. "
-      + "The row above then shows the press value and a mark that the two have "
-      + "been pulled apart; moving the simple slider ties them back together. "
-      + "The deadzone near rest forces a release and resets the tracking, "
-      + "which keeps noise around the resting position from producing phantom "
-      + "clicks.",
+    "trigger.advancedHint": "The slider in the row above sets both values at "
+      + "once: release ends up 15\u00a0% above press, so a finger trembling on the "
+      + "switching point does not drop the button at every wobble. Here the two "
+      + "can be set apart freely \u2013 a lower release value lets the button drop "
+      + "out sooner than it fires. The row then shows the press value and a "
+      + "mark that the pairing no longer holds; moving the simple slider "
+      + "restores it. The deadzone near rest forces a release and resets the "
+      + "tracking, which keeps noise around the resting position from "
+      + "producing phantom clicks.",
     "buttons.hint1": "Only one sensor measures per button: enabling one "
       + "releases the one so far on the same side. The thresholds take effect "
       + "in the device itself \u2013 if a threshold lies above the pressure the "
@@ -393,9 +395,10 @@ const TEXTS = {
     "trigger.deadzone": "Totzone",
     "trigger.advanced": "Erweiterte Einstellungen",
     "trigger.advancedSub": "Ansprechen und Loslassen getrennt, dazu die Totzone",
-    "trigger.split": "Ansprechen und Loslassen sind auseinandergezogen: "
-      + "Ansprechen {press}, Loslassen {release}. Der Regler zeigt den Wert "
-      + "f\u00fcrs Ansprechen. Ihn zu bewegen f\u00fchrt beide wieder zusammen.",
+    "trigger.split": "Das Loslassen folgt dem Regler nicht mehr: Ansprechen "
+      + "{press}, Loslassen {release}. \u00dcblicherweise liegt das Loslassen "
+      + "15\u00a0% \u00fcber dem Ansprechen. Der Regler zeigt den Wert f\u00fcrs "
+      + "Ansprechen; ihn zu bewegen stellt die Kopplung wieder her.",
     "trigger.inactive": "Feste Schwelle gew\u00e4hlt \u2013 gespeichert, aber gerade "
       + "ohne Wirkung",
     "trigger.needsConnection": "Zuerst die Maus verbinden. Die Schwellenart "
@@ -417,14 +420,17 @@ const TEXTS = {
       + "\u201eLaden\u201c verwirft sie. Die beiden Marken auf den Druckbalken der "
       + "Live-Ansicht zeigen, wo das Ger\u00e4t tats\u00e4chlich schaltet; sie folgen "
       + "einer \u00c4nderung also erst, wenn sie geschrieben ist.",
-    "trigger.advancedHint": "Ansprechen und Loslassen d\u00fcrfen auseinander "
-      + "liegen \u2013 ein kleinerer Wert f\u00fcrs Loslassen l\u00e4sst die Taste fr\u00fcher "
-      + "abfallen, als sie ausl\u00f6st. Die Zeile oben zeigt dann den Wert f\u00fcrs "
-      + "Ansprechen und eine Marke, dass beide auseinandergezogen sind; den "
-      + "einfachen Regler zu bewegen f\u00fchrt sie wieder zusammen. Die Totzone "
-      + "nahe der Ruhelage erzwingt das Loslassen und setzt die Verfolgung "
-      + "zur\u00fcck; das verhindert, dass ein Rauschen um die Ruhelage zu "
-      + "Klicks aus dem Nichts wird.",
+    "trigger.advancedHint": "Der Regler in der Zeile oben stellt beide Werte "
+      + "zugleich: Das Loslassen liegt danach 15\u00a0% \u00fcber dem Ansprechen, damit "
+      + "ein Finger, der auf dem Schaltpunkt zittert, nicht bei jeder "
+      + "Schwankung loslaesst. Hier lassen sie sich frei auseinanderziehen \u2013 "
+      + "ein kleinerer Wert f\u00fcrs Loslassen l\u00e4sst die Taste fr\u00fcher abfallen, "
+      + "als sie ausl\u00f6st. Die Zeile zeigt dann den Wert f\u00fcrs Ansprechen und "
+      + "eine Marke, dass die Kopplung nicht mehr gilt; den einfachen Regler "
+      + "zu bewegen stellt sie wieder her. Die Totzone nahe der Ruhelage "
+      + "erzwingt das Loslassen und setzt die Verfolgung zur\u00fcck; das "
+      + "verhindert, dass ein Rauschen um die Ruhelage zu Klicks aus dem "
+      + "Nichts wird.",
     "buttons.hint1": "Je Taste misst nur ein Sensor: Eine Freigabe hebt die "
       + "bisherige derselben Seite auf. Die Schwellwerte wirken im Ger\u00e4t "
       + "selbst \u2013 liegt eine Schwelle \u00fcber dem Druck, den der Sensor "
