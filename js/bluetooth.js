@@ -184,23 +184,6 @@ export class XensivMouseBluetooth extends EventTarget {
     safeDisconnect(this.device);
   }
 
-  // Erzwungener Neuaufbau – die Alternative zum Neustart der Maus.
-  async reset() {
-    const device = this.device || (await this.knownDevices())[0];
-
-    // Ohne bekanntes Geraet gibt es nichts neu aufzubauen. Der Druck auf
-    // die Schaltflaeche ist die Geste, die der Auswahldialog verlangt -
-    // also fragen wir nach, statt in einer Sackgasse zu enden.
-    if (!device) return this.connect();
-
-    safeDisconnect(device);
-    this.handleDisconnect(true);
-
-    // Der Maus Zeit geben, die alte Verbindung ihrerseits abzuräumen.
-    await delay(1500);
-    await this.attach(device);
-  }
-
   // `expected` sagt, ob das Abmelden von hier ausging. Gesucht wird danach
   // nicht mehr - die Seite raeumt auf und steht bereit fuer eine neue
   // Verbindung, wie im WebHID-Zweig.

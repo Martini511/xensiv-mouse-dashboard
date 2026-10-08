@@ -23,7 +23,6 @@ const mouse = useHid ? new XensivMouseHid() : new XensivMouseBluetooth();
 
 const charts = new WheelCharts(byId("angle-chart"), byId("field-chart"));
 const connectButton = byId("connect-button");
-const resetButton = byId("reset-button");
 const connectionLabel = byId("connection-label");
 const batteryLabel = byId("battery-level");
 const toast = byId("toast");
@@ -159,20 +158,6 @@ connectButton.addEventListener("click", async () => {
   }
 });
 
-resetButton.addEventListener("click", async () => {
-  resetButton.disabled = true;
-  setConnectionState("searching", "state.resetting");
-
-  try {
-    await mouse.reset();
-  } catch (error) {
-    setConnectionState("offline", "state.offline");
-    showError(error);
-  } finally {
-    resetButton.disabled = false;
-  }
-});
-
 mouse.addEventListener("connected", async ({ detail: device }) => {
   setDeviceControls(true);
 
@@ -189,7 +174,6 @@ mouse.addEventListener("connected", async ({ detail: device }) => {
   // verbunden wurde.
   setConnectionState("online", "state.unnamed", device.name || null);
   setConnectButton("header.disconnect");
-  resetButton.hidden = false;
 
   await updateBattery();
   window.clearInterval(batteryTimer);
@@ -256,12 +240,6 @@ mouse.addEventListener("disconnected", ({ detail }) => {
   triggerStates.clear();
   lastPressure = null;
   updateTriggerAvailability();
-
-  // Die Seite steht ab hier bereit fuer eine neue Verbindung, nicht fuer
-  // die Fortsetzung der alten. Der Knopf zum Neuaufbau gehoert deshalb
-  // weg - er wuerde dasselbe tun wie "Maus verbinden", nur mit einem
-  // Namen, der etwas anderes verspricht.
-  resetButton.hidden = true;
 
   // Die Beobachtungen gelten nur für die abgelaufene Sitzung. Was in die
   // Maus geschrieben wurde, steht dort weiter - die Notiz darüber bleibt.

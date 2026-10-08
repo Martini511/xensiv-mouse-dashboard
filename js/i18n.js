@@ -30,7 +30,6 @@ const TEXTS = {
     "brand.sub": "Configuration console",
     "battery.title": "Battery level",
     "lang.aria": "Language",
-    "header.reconnect": "Reconnect",
     "header.connect": "Connect mouse",
     "header.disconnect": "Disconnect",
 
@@ -228,7 +227,6 @@ const TEXTS = {
     "state.offline": "Not connected",
     "state.unnamed": "XENSIV\u2122 Mouse",
     "state.selecting": "Select mouse",
-    "state.resetting": "Resetting",
     "state.running": "Live monitoring running",
     "state.paused": "Live monitoring paused",
     "state.unsupported": "Not supported",
@@ -305,7 +303,6 @@ const TEXTS = {
     "brand.sub": "Konfigurationskonsole",
     "battery.title": "Batteriestand",
     "lang.aria": "Sprache",
-    "header.reconnect": "Neu verbinden",
     "header.connect": "Maus verbinden",
     "header.disconnect": "Trennen",
 
@@ -511,7 +508,6 @@ const TEXTS = {
     "state.offline": "Nicht verbunden",
     "state.unnamed": "XENSIV\u2122 Maus",
     "state.selecting": "Maus ausw\u00e4hlen",
-    "state.resetting": "Wird zur\u00fcckgesetzt",
     "state.running": "Live-\u00dcberwachung l\u00e4uft",
     "state.paused": "Live-\u00dcberwachung angehalten",
     "state.unsupported": "Nicht unterst\u00fctzt",

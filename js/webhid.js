@@ -213,29 +213,6 @@ export class XensivMouseHid extends EventTarget {
     closeQuietly(this.device);
   }
 
-  // Erzwungener Neuaufbau – die Alternative zum Neustart der Maus.
-  async reset() {
-    const device = this.device || (await this.knownDevices())[0];
-
-    // Kennt der Browser gar kein Geraet mehr - weil die Freigabe
-    // zurueckgenommen wurde oder die Maus dem System abhanden gekommen ist
-    // -, laesst sich nichts neu aufbauen. Statt in einer Sackgasse zu enden
-    // fragt die Seite dann nach: Der Druck auf die Schaltflaeche ist genau
-    // die Geste, die der Browser fuer den Auswahldialog verlangt.
-    if (!device) return this.connect();
-
-    try {
-      if (device.opened) await device.close();
-    } catch {
-      // Kanal war ohnehin geschlossen
-    }
-
-    this.handleDisconnect(true);
-    await delay(600);
-
-    await this.attach(device);
-  }
-
   // `expected` sagt, ob das Abmelden von hier ausging. Die Seite meldet nur
   // unerwartetes loest die Suche aus.
   handleDisconnect(expected = false) {
@@ -518,8 +495,4 @@ async function closeQuietly(device) {
   } catch {
     // Kanal war ohnehin geschlossen
   }
-}
-
-function delay(milliseconds) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
