@@ -178,10 +178,26 @@ const TEXTS = {
     "cal.save": "Save values",
     "cal.start": "Start 360\u00b0 calibration",
     "cal.hint": "The calibration run expects one full revolution of the wheel. "
+      + "While it runs, the mouse does not answer \u2013 starting it closes the "
+      + "connection, and a guide shows what to do. "
       + "The pressure threshold is shown a thousand times larger than the "
       + "firmware keeps it \u2013 exactly as in the desktop tool. The live view "
       + "shows the mark a hundred units lower: the mouse clicks that much "
       + "earlier than the stored value suggests.",
+
+    "calGuide.eyebrow": "WHEEL CALIBRATION",
+    "calGuide.title": "Calibration is running",
+    "calGuide.intro": "The mouse is now calibrating its wheel. While it does "
+      + "so, it does not answer this page \u2013 the connection has therefore "
+      + "been closed.",
+    "calGuide.still": "Do not move the mouse \u2013 leave it lying still.",
+    "calGuide.turn": "Only turn the mouse wheel.",
+    "calGuide.noClick": "Do not press the wheel \u2013 a wheel click distorts "
+      + "the calibration.",
+    "calGuide.reconnect": "As soon as the wheel vibrates again while turning, "
+      + "the calibration is complete. Then connect the mouse to this page "
+      + "again manually via \u201cConnect mouse\u201d.",
+    "calGuide.close": "Got it",
 
     "acc.sleep.title": "Sleep mode",
     "acc.sleep.sub": "Power saving after inactivity",
@@ -255,8 +271,6 @@ const TEXTS = {
     "msg.buttonsSaved": "Button settings saved",
     "msg.calLoaded": "Calibration loaded",
     "msg.calSaved": "Calibration saved",
-    "msg.calStarted": "Calibration started. Please turn the wheel one full "
-      + "revolution.",
     "msg.pressWarning": "The stored maximum length ({trigger}) lies below the "
       + "resting radius of the wheel ({radius}). A wheel click cannot be told "
       + "apart that way \u2013 please run the 360\u00b0 calibration.",
@@ -457,10 +471,27 @@ const TEXTS = {
     "cal.save": "Werte speichern",
     "cal.start": "360\u00b0-Kalibrierung starten",
     "cal.hint": "Der Kalibrierlauf erwartet eine vollst\u00e4ndige Umdrehung des "
-      + "Rads. Die Druckschwelle wird tausendfach gr\u00f6\u00dfer angezeigt, als die "
+      + "Rads. W\u00e4hrenddessen antwortet die Maus nicht \u2013 der Start trennt "
+      + "die Verbindung, und eine Anleitung zeigt, was zu tun ist. "
+      + "Die Druckschwelle wird tausendfach gr\u00f6\u00dfer angezeigt, als die "
       + "Firmware sie f\u00fchrt \u2013 genau wie im Desktop-Werkzeug. Die Live-Ansicht "
       + "zeigt die Marke hundert Einheiten tiefer: So viel fr\u00fcher klickt die "
       + "Maus, als der gespeicherte Wert vermuten l\u00e4sst.",
+
+    "calGuide.eyebrow": "RADKALIBRIERUNG",
+    "calGuide.title": "Kalibrierung l\u00e4uft",
+    "calGuide.intro": "Die Maus kalibriert jetzt ihr Rad. Solange sie das tut, "
+      + "antwortet sie dieser Seite nicht \u2013 die Verbindung ist deshalb "
+      + "getrennt.",
+    "calGuide.still": "Die Maus w\u00e4hrenddessen nicht bewegen \u2013 sie bleibt "
+      + "ruhig liegen.",
+    "calGuide.turn": "Nur das Mausrad drehen.",
+    "calGuide.noClick": "Das Mausrad nicht dr\u00fccken \u2013 ein Radklick "
+      + "verf\u00e4lscht die Kalibrierung.",
+    "calGuide.reconnect": "Sobald das Rad beim Drehen wieder vibriert, ist die "
+      + "Kalibrierung abgeschlossen. Dann die Maus \u00fcber \u201eMaus verbinden\u201c "
+      + "manuell wieder mit dieser Seite verbinden.",
+    "calGuide.close": "Verstanden",
 
     "acc.sleep.title": "Ruhezustand",
     "acc.sleep.sub": "Stromsparen nach Untaetigkeit",
@@ -538,8 +569,6 @@ const TEXTS = {
     "msg.buttonsSaved": "Tasteneinstellungen gespeichert",
     "msg.calLoaded": "Kalibrierung geladen",
     "msg.calSaved": "Kalibrierung gespeichert",
-    "msg.calStarted": "Kalibrierung gestartet. Bitte das Rad einmal "
-      + "vollst\u00e4ndig drehen.",
     "msg.pressWarning": "Die gespeicherte Maximall\u00e4nge ({trigger}) liegt unter "
       + "dem Ruheradius des Rads ({radius}). Ein Radklick l\u00e4sst sich damit "
       + "nicht unterscheiden \u2013 bitte die 360\u00b0-Kalibrierung ausf\u00fchren.",

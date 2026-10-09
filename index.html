@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Source+Sans+3:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <!-- Die Fassungsnummer zwingt Browser und Auslieferung dazu, die
        aktuelle Datei zu holen statt einer zwischengespeicherten. -->
-  <link rel="stylesheet" href="./style.css?v=119">
+  <link rel="stylesheet" href="./style.css?v=120">
 </head>
 <body>
   <!-- Vorspann: liegt über der Oberfläche und löst sich nach dem
@@ -450,7 +450,9 @@
             <button id="start-calibration" class="primary-button" data-device-control data-i18n="cal.start">Start 360&deg; calibration</button>
           </div>
           <p class="hint" data-i18n="cal.hint">The calibration run expects one
-          full revolution of the wheel. The pressure threshold is shown a
+          full revolution of the wheel. While it runs, the mouse does not
+          answer &ndash; starting it closes the connection, and a guide shows
+          what to do. The pressure threshold is shown a
           thousand times larger than the firmware keeps it &ndash; exactly as in
           the desktop tool. The live view shows the mark a hundred units lower:
           the mouse clicks that much earlier than the stored value suggests.</p>
@@ -507,9 +509,31 @@
        ist zugleich die Nummer, die unten die Module aus dem
        Zwischenspeicher holt: zwei Zaehler waeren zwei Gelegenheiten,
        auseinanderzulaufen. -->
-          <small class="app-version">v119</small>
+          <small class="app-version">v120</small>
 
   <div id="toast" class="toast" role="status"></div>
+
+  <!-- Waehrend des Kalibrierlaufs antwortet die Maus nicht, und ein
+       Wiederverbinden von selbst gibt es nicht. Was zu tun ist, steht
+       deshalb hier und nicht in einer Meldung, die nach Sekunden verschwindet. -->
+  <dialog id="calibration-dialog" class="guide-dialog" aria-labelledby="calibration-dialog-title">
+    <p class="eyebrow" data-i18n="calGuide.eyebrow">WHEEL CALIBRATION</p>
+    <h2 id="calibration-dialog-title" data-i18n="calGuide.title">Calibration is running</h2>
+    <p data-i18n="calGuide.intro">The mouse is now calibrating its wheel. While
+    it does so, it does not answer this page &ndash; the connection has
+    therefore been closed.</p>
+    <ol class="guide-steps">
+      <li data-i18n="calGuide.still">Do not move the mouse &ndash; leave it lying still.</li>
+      <li data-i18n="calGuide.turn">Only turn the mouse wheel.</li>
+      <li data-i18n="calGuide.noClick">Do not press the wheel &ndash; a wheel click distorts the calibration.</li>
+      <li data-i18n="calGuide.reconnect">As soon as the wheel vibrates again while
+      turning, the calibration is complete. Then connect the mouse to this page
+      again manually via &ldquo;Connect mouse&rdquo;.</li>
+    </ol>
+    <form method="dialog" class="guide-actions">
+      <button class="primary-button" data-i18n="calGuide.close">Got it</button>
+    </form>
+  </dialog>
   <!-- three.js liegt im Projekt statt auf einem fremden Netz: Das Dashboard
        wird oft ohne Internetzugang am Gerät benutzt.
 
@@ -525,17 +549,17 @@
       "imports": {
         "three": "./js/vendor/three.module.min.js",
         "three/addons/": "./js/vendor/addons/",
-        "./js/app.js": "./js/app.js?v=119",
-        "./js/bluetooth.js": "./js/bluetooth.js?v=119",
-        "./js/charts.js": "./js/charts.js?v=119",
-        "./js/i18n.js": "./js/i18n.js?v=119",
-        "./js/model3d.js": "./js/model3d.js?v=119",
-        "./js/protocol.js": "./js/protocol.js?v=119",
-        "./js/webhid.js": "./js/webhid.js?v=119"
+        "./js/app.js": "./js/app.js?v=120",
+        "./js/bluetooth.js": "./js/bluetooth.js?v=120",
+        "./js/charts.js": "./js/charts.js?v=120",
+        "./js/i18n.js": "./js/i18n.js?v=120",
+        "./js/model3d.js": "./js/model3d.js?v=120",
+        "./js/protocol.js": "./js/protocol.js?v=120",
+        "./js/webhid.js": "./js/webhid.js?v=120"
       }
     }
   </script>
-  <script type="module" src="./js/intro.js?v=119"></script>
-  <script type="module" src="./js/app.js?v=119"></script>
+  <script type="module" src="./js/intro.js?v=120"></script>
+  <script type="module" src="./js/app.js?v=120"></script>
 </body>
 </html>

@@ -252,8 +252,9 @@ mouse.addEventListener("disconnected", ({ detail }) => {
 
   // Ein gewolltes Trennen braucht keine Meldung - der Nutzer hat es eben
   // selbst veranlasst. Ein Verlust schon: Sonst stuende die Seite ohne
-  // Erklaerung auf "Nicht verbunden".
-  if (!detail?.expected) notify(t("msg.lost"), true);
+  // Erklaerung auf "Nicht verbunden". Beim Start der Kalibrierung ist der
+  // Abbruch dagegen erwartet, und die Anleitung erklaert ihn bereits.
+  if (!detail?.expected && !calibrationStarting) notify(t("msg.lost"), true);
 });
 
 mouse.addEventListener("notice", ({ detail }) => {
@@ -1667,9 +1668,41 @@ byId("save-calibration").addEventListener("click", () => {
   }, t("msg.calSaved"));
 });
 
-byId("start-calibration").addEventListener("click", () => run(
-  () => mouse.startCalibration(),
-  t("msg.calStarted")));
+// Waehrend des Kalibrierlaufs antwortet die Maus nicht mehr - weder auf den
+// Startbefehl noch auf alles danach. Wiederverbinden laesst sich erst, wenn
+// sie fertig ist, und auch dann nur ueber den Auswahldialog, also per Klick.
+// Deshalb trennt die Seite selbst und zeigt eine Anleitung, statt auf einen
+// Zeitablauf zu warten und dann "Verbindung verloren" zu melden.
+//
+// Web Bluetooth kennt fuer das Schreiben kein Zeitlimit; ohne diese Frist
+// hinge der Start dort unbegrenzt.
+const CALIBRATION_START_TIMEOUT = 3000;
+const calibrationDialog = byId("calibration-dialog");
+let calibrationStarting = false;
+
+byId("start-calibration").addEventListener("click", async () => {
+  calibrationStarting = true;
+  calibrationDialog.showModal();
+
+  try {
+    await Promise.race([
+      mouse.startCalibration(),
+      delay(CALIBRATION_START_TIMEOUT),
+    ]);
+  } catch (error) {
+    // Bricht die Verbindung dabei ab, hat die Maus mit dem Lauf begonnen.
+    // Steht sie noch, kam eine Antwort - und die lehnte den Start ab.
+    if (mouse.connected) {
+      calibrationStarting = false;
+      calibrationDialog.close();
+      showError(error);
+      return;
+    }
+  }
+
+  if (mouse.connected) mouse.disconnect();
+  calibrationStarting = false;
+});
 
 function readCalibration() {
   return {
